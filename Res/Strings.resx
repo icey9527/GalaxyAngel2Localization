@@ -32,7 +32,7 @@
     <value>Missing path source information: </value>
   </data><data name="ArtdinkDatRebuilder_PathSources_1" xml:space="preserve">
     <value>Original block not found</value>
-  <data name="ArtdinkIdxUpdater_1" xml:space="preserve">
+  </data name="ArtdinkIdxUpdater_1" xml:space="preserve">
     <value>DAT entry not found in idx.dat: </value>
   </data><data name="ArtdinkIdxUpdater_2" xml:space="preserve">
     <value>table1Count &lt;= 1; does not appear to be a valid idx.dat file</value>
