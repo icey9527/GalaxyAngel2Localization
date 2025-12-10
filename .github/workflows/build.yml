@@ -27,11 +27,14 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       # 在 CI 里跑 SR.py，并用生成的 .cs 覆盖当前工作目录（只影响本次构建）
       - name: Run localization script and apply changes
         shell: pwsh
+        env:
+          PYTHONUTF8: '1'
+          PYTHONIOENCODING: 'utf-8'
         run: |
           # 1) 运行脚本：源码根目录就是当前目录 .
           python .\SR.py .
