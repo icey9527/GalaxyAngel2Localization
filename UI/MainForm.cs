@@ -22,9 +22,10 @@ namespace GalaxyAngel2Localization.UI
 
         public MainForm()
         {
-            InitializeComponent();
-
             _config = AppConfig.Load(_configIniPath);
+            SR.SetLanguage(_config.Language);
+
+            InitializeComponent();
 
             InitExtractExtensions();
             LoadProjects();

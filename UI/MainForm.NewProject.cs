@@ -145,7 +145,7 @@ namespace GalaxyAngel2Localization.UI
             }
 
                 builder.SaveIndex();
-                lblStatus.Text = "完成：已生成 original/、modified/、packed/ 以及 list.json";
+                lblStatus.Text = "完成：已创建 original/、modified/、packed/ 以及 list.json";
 
                 RegisterProject(imageName);
 
@@ -157,7 +157,7 @@ namespace GalaxyAngel2Localization.UI
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "生成工作目录失败：\n" + ex,
+                MessageBox.Show(this, "创建工作目录失败：\n" + ex,
                     "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

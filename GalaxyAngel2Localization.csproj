@@ -6,6 +6,21 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    
+    <!-- ===== 单文件发布配置 ===== -->
+    <!-- 框架依赖版本（不带运行时） -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>false</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    
+    <!-- Windows特定配置 -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWPF>false</UseWPF>
+    
+    <!-- 发布配置 -->
+    <DebugType>embedded</DebugType>
+    <DebugSymbols>true</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>

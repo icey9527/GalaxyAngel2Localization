@@ -152,7 +152,7 @@ namespace GalaxyAngel2Localization.UI
             this.btnBuildWorkspace.Name = "btnBuildWorkspace";
             this.btnBuildWorkspace.Size = new System.Drawing.Size(75, 23);
             this.btnBuildWorkspace.TabIndex = 3;
-            this.btnBuildWorkspace.Text = "生成";
+            this.btnBuildWorkspace.Text = "创建";
             this.btnBuildWorkspace.UseVisualStyleBackColor = true;
             this.btnBuildWorkspace.Click += new System.EventHandler(this.btnBuildWorkspace_Click);
             // 
@@ -299,7 +299,7 @@ namespace GalaxyAngel2Localization.UI
             this.tabPrePack.Padding = new System.Windows.Forms.Padding(3);
             this.tabPrePack.Size = new System.Drawing.Size(745, 474);
             this.tabPrePack.TabIndex = 3;
-            this.tabPrePack.Text = "生成前任务";
+            this.tabPrePack.Text = "重建前任务";
             this.tabPrePack.UseVisualStyleBackColor = true;
             // 
             // txtPrePackCommands
@@ -332,7 +332,7 @@ namespace GalaxyAngel2Localization.UI
             this.lblPrePackHint.Name = "lblPrePackHint";
             this.lblPrePackHint.Size = new System.Drawing.Size(401, 30);
             this.lblPrePackHint.TabIndex = 0;
-            this.lblPrePackHint.Text = "在下方每行输入一个命令，例如：python 1.py 或 a.bat。\r\n生成前会按顺序执行所有命令，全部成功后才会开始重建 DAT。";
+            this.lblPrePackHint.Text = "在下方每行输入一个命令，例如：python 1.py 或 a.bat。\r\n重建前会按顺序执行所有命令，全部成功后才会开始重建 DAT。";
             // 
             // tabPack
             // 
@@ -345,7 +345,7 @@ namespace GalaxyAngel2Localization.UI
             this.tabPack.Padding = new System.Windows.Forms.Padding(3);
             this.tabPack.Size = new System.Drawing.Size(745, 474);
             this.tabPack.TabIndex = 2;
-            this.tabPack.Text = "生成";
+            this.tabPack.Text = "重建封包";
             this.tabPack.UseVisualStyleBackColor = true;
             // 
             // txtPackLog
@@ -379,7 +379,7 @@ namespace GalaxyAngel2Localization.UI
             this.btnPackStart.Name = "btnPackStart";
             this.btnPackStart.Size = new System.Drawing.Size(75, 23);
             this.btnPackStart.TabIndex = 1;
-            this.btnPackStart.Text = "开始生成";
+            this.btnPackStart.Text = "重建";
             this.btnPackStart.UseVisualStyleBackColor = true;
             this.btnPackStart.Click += new System.EventHandler(this.btnPackStart_Click);
             // 
@@ -390,7 +390,7 @@ namespace GalaxyAngel2Localization.UI
             this.lblPackHint.Name = "lblPackHint";
             this.lblPackHint.Size = new System.Drawing.Size(497, 30);
             this.lblPackHint.TabIndex = 0;
-            this.lblPackHint.Text = "根据 list.json 和 original/、modified/ 生成每个 DAT 需要写回的压缩块集合。\r\n写到 packed/ 目录。";
+            this.lblPackHint.Text = "根据 list.json 重建 DAT 并更新 idx.dat 索引，输出到 packed/ 。\r\n优先使用modified/ (修改文件) ，没有则使用 original/ (原始文件)。\r\n为了最大程度减少差异补丁体积，modified/ 不应包含任何未修改的文件。";
             // 
             // MainForm
             // 

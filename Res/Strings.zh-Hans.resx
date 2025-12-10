@@ -1,0 +1,176 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader><resheader name="version">
+    <value>2.0</value>
+  </resheader><resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms</value>
+  </resheader><resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms</value>
+  </resheader><data name="AgiEncode_1" xml:space="preserve">
+    <value>图像尺寸不一致</value>
+  </data><data name="AgiEncode_2" xml:space="preserve">
+    <value>找不到 PNG 文件: </value>
+  </data><data name="AgiEncode_3" xml:space="preserve">
+    <value>写入 AGI 失败: </value>
+  </data><data name="ArtdinkDatRebuilder_1" xml:space="preserve">
+    <value>[DAT] 失败: {datName} : {Message}</value>
+  </data><data name="ArtdinkDatRebuilder_2" xml:space="preserve">
+    <value>[DAT] 完成: {datName}  总条目 {TotalPaths}, modified {ModifiedCount}, original {OriginalCount}</value>
+  </data><data name="ArtdinkDatRebuilder_3" xml:space="preserve">
+    <value>[DAT] 开始重建: {datName}</value>
+  </data><data name="ArtdinkDatRebuilder_4" xml:space="preserve">
+    <value>找不到 original 目录: </value>
+  </data><data name="ArtdinkDatRebuilder_5" xml:space="preserve">
+    <value>找不到 list.json</value>
+  </data><data name="ArtdinkDatRebuilder_DatRebuild_1" xml:space="preserve">
+    <value>未在根目录第一层找到目录: </value>
+  </data><data name="ArtdinkDatRebuilder_DatRebuild_2" xml:space="preserve">
+    <value>缺少路径源信息(FSTS): </value>
+  </data><data name="ArtdinkDatRebuilder_DatRebuild_3" xml:space="preserve">
+    <value>缺少路径源信息: </value>
+  </data><data name="ArtdinkDatRebuilder_PathSources_1" xml:space="preserve">
+    <value>找不到原始块</value>
+  </data><data name="ArtdinkIdxUpdater_1" xml:space="preserve">
+    <value>idx.dat 中找不到此 dat: </value>
+  </data><data name="ArtdinkIdxUpdater_2" xml:space="preserve">
+    <value>table1Count &lt;= 1，看起来不是 idx.dat</value>
+  </data><data name="ArtdinkIdxUpdater_3" xml:space="preserve">
+    <value>idx.dat magic 不是 PIDX</value>
+  </data><data name="ArtdinkIdxUpdater_4" xml:space="preserve">
+    <value>[IDX] 更新 {datName} 失败: {Message}</value>
+  </data><data name="ArtdinkIdxUpdater_5" xml:space="preserve">
+    <value>[IDX] 已更新 {datName} -&gt; idx.dat</value>
+  </data><data name="ArtdinkIdxUpdater_6" xml:space="preserve">
+    <value>[IDX] 找不到打包后的 {datName}，跳过</value>
+  </data><data name="ArtdinkIdxUpdater_7" xml:space="preserve">
+    <value>[IDX] 找不到 list.json，跳过更新</value>
+  </data><data name="ArtdinkIdxUpdater_8" xml:space="preserve">
+    <value>[IDX] original/idx.dat 不存在，跳过更新</value>
+  </data><data name="IsoImage_1" xml:space="preserve">
+    <value>Root Directory Record 无效</value>
+  </data><data name="IsoImage_2" xml:space="preserve">
+    <value>不是有效的 ISO9660 镜像</value>
+  </data><data name="IsoImage_3" xml:space="preserve">
+    <value>无法读取 Primary Volume Descriptor</value>
+  </data><data name="MainForm_1" xml:space="preserve">
+    <value>[ERROR] 退出代码 {ExitCode}</value>
+  </data><data name="MainForm_10" xml:space="preserve">
+    <value>预处理失败。</value>
+  </data><data name="MainForm_11" xml:space="preserve">
+    <value>[TASK] 无预处理任务</value>
+  </data><data name="MainForm_12" xml:space="preserve">
+    <value>预处理任务失败，已中止生成。</value>
+  </data><data name="MainForm_13" xml:space="preserve">
+    <value>正在执行预处理任务...</value>
+  </data><data name="MainForm_14" xml:space="preserve">
+    <value>提示</value>
+  </data><data name="MainForm_15" xml:space="preserve">
+    <value>当前项目还没有生成工作目录，请先在“新建项目”里处理一次该 ISO。</value>
+  </data><data name="MainForm_16" xml:space="preserve">
+    <value>请先在顶部下拉框选择一个项目。</value>
+  </data><data name="MainForm_2" xml:space="preserve">
+    <value>[ERROR] 无法启动进程</value>
+  </data><data name="MainForm_3" xml:space="preserve">
+    <value>错误</value>
+  </data><data name="MainForm_4" xml:space="preserve">
+    <value>重建 DAT 过程中出错：\n</value>
+  </data><data name="MainForm_5" xml:space="preserve">
+    <value>重建失败。</value>
+  </data><data name="MainForm_6" xml:space="preserve">
+    <value>完成</value>
+  </data><data name="MainForm_7" xml:space="preserve">
+    <value>重建完成：\n  DAT 数量：{DatCount}\n  总路径数：{TotalPaths}\n  使用 modified：{ModifiedCount}\n  使用 original：{OriginalCount}\n\n用时 {TotalSeconds} 秒\n输出目录：\n{PackedRoot}\n\n说明：这是全新构建的 DAT，可以直接用于生成游戏镜像或做差分补丁。</value>
+  </data><data name="MainForm_8" xml:space="preserve">
+    <value>完成：重建 {DatCount} 个 DAT，合计 {TotalPaths} 条，modified {ModifiedCount} 条，original {OriginalCount} 条。</value>
+  </data><data name="MainForm_9" xml:space="preserve">
+    <value>正在重建 DAT，请稍候...</value>
+  </data><data name="MainForm_Designer_1" xml:space="preserve">
+    <value>GA2本地化工具</value>
+  </data><data name="MainForm_Designer_10" xml:space="preserve">
+    <value>全选/全不选</value>
+  </data><data name="MainForm_Designer_11" xml:space="preserve">
+    <value>添加后缀</value>
+  </data><data name="MainForm_Designer_12" xml:space="preserve">
+    <value>开始提取</value>
+  </data><data name="MainForm_Designer_13" xml:space="preserve">
+    <value>提取</value>
+  </data><data name="MainForm_Designer_14" xml:space="preserve">
+    <value>选择 ISO...</value>
+  </data><data name="MainForm_Designer_15" xml:space="preserve">
+    <value>创建</value>
+  </data><data name="MainForm_Designer_16" xml:space="preserve">
+    <value>新建项目</value>
+  </data><data name="MainForm_Designer_17" xml:space="preserve">
+    <value>当前项目：</value>
+  </data><data name="MainForm_Designer_2" xml:space="preserve">
+    <value>根据 list.json 重建 DAT 并更新 idx.dat 索引，输出到 packed/ 。\r\n优先使用modified/ (修改文件) ，没有则使用 original/ (原始文件)。\r\n为了最大程度减少差异补丁体积，modified/ 不应包含任何未修改的文件。</value>
+  </data><data name="MainForm_Designer_3" xml:space="preserve">
+    <value>重建</value>
+  </data><data name="MainForm_Designer_4" xml:space="preserve">
+    <value>就绪</value>
+  </data><data name="MainForm_Designer_5" xml:space="preserve">
+    <value>重建封包</value>
+  </data><data name="MainForm_Designer_6" xml:space="preserve">
+    <value>在下方每行输入一个命令，例如：python 1.py 或 a.bat。\r\n重建前会按顺序执行所有命令，全部成功后才会开始重建 DAT。</value>
+  </data><data name="MainForm_Designer_7" xml:space="preserve">
+    <value>保存</value>
+  </data><data name="MainForm_Designer_8" xml:space="preserve">
+    <value>重建前任务</value>
+  </data><data name="MainForm_Designer_9" xml:space="preserve">
+    <value>在上方选择项目，勾选要提取的类型，然后点击“开始提取”。\r\nAGI：工具会把 .agi 转成 .agi.png。请只把你修改过的 PNG 复制到 modified/，避免未修改图片参与差分补丁导致补丁过大。</value>
+  </data><data name="MainForm_Extract_1" xml:space="preserve">
+    <value>[进度] {done}/{total}</value>
+  </data><data name="MainForm_Extract_10" xml:space="preserve">
+    <value>提取完成：成功 {OkCount}，失败 {FailCount}。</value>
+  </data><data name="MainForm_Extract_11" xml:space="preserve">
+    <value>正在提取，请稍候...</value>
+  </data><data name="MainForm_Extract_12" xml:space="preserve">
+    <value>请至少勾选一个要提取的类型，或者先添加一个自定义后缀名。</value>
+  </data><data name="MainForm_Extract_13" xml:space="preserve">
+    <value>扩展名 {name} 已存在。</value>
+  </data><data name="MainForm_Extract_14" xml:space="preserve">
+    <value>请输入合法的扩展名，例如：txt 或 .txt</value>
+  </data><data name="MainForm_Extract_2" xml:space="preserve">
+    <value>[失败] {relPath}</value>
+  </data><data name="MainForm_Extract_3" xml:space="preserve">
+    <value>[普通] {relPath}</value>
+  </data><data name="MainForm_Extract_4" xml:space="preserve">
+    <value>[AGI保持原样] {relPath}</value>
+  </data><data name="MainForm_Extract_5" xml:space="preserve">
+    <value>[缺失] {relPath}</value>
+  </data><data name="MainForm_Extract_6" xml:space="preserve">
+    <value>没有匹配要提取的文件。\r\n</value>
+  </data><data name="MainForm_Extract_7" xml:space="preserve">
+    <value>提取过程中出错：\n</value>
+  </data><data name="MainForm_Extract_8" xml:space="preserve">
+    <value>提取失败。</value>
+  </data><data name="MainForm_Extract_9" xml:space="preserve">
+    <value>提取完成：成功 {OkCount}，失败 {FailCount}。\n\n提取目录：\n{ExtractRoot}\n\n提示：只把你“真改过”的 PNG/TBL 等复制到 modified/，\n不要把整包原始文件都搬过去，这样后面做差异补丁才不会很大。</value>
+  </data><data name="MainForm_NewProject_1" xml:space="preserve">
+    <value>创建工作目录失败：\n</value>
+  </data><data name="MainForm_NewProject_2" xml:space="preserve">
+    <value>处理完成！\n\n工作目录：\n</value>
+  </data><data name="MainForm_NewProject_3" xml:space="preserve">
+    <value>完成：已创建 original/、modified/、packed/ 以及 list.json</value>
+  </data><data name="MainForm_NewProject_4" xml:space="preserve">
+    <value>请先勾选要处理的 DAT 文件。</value>
+  </data><data name="MainForm_NewProject_5" xml:space="preserve">
+    <value>请先选择有效的 ISO 文件。</value>
+  </data><data name="MainForm_NewProject_6" xml:space="preserve">
+    <value>解析 ISO 失败：\n</value>
+  </data><data name="MainForm_NewProject_7" xml:space="preserve">
+    <value>读取到 {_isoEntriesLength} 个文件，DAT 可选 {ItemsCount} 个</value>
+  </data><data name="MainForm_NewProject_8" xml:space="preserve">
+    <value>选择 ISO 镜像</value>
+  </data><data name="MainForm_NewProject_9" xml:space="preserve">
+    <value>ISO 镜像 (*.iso)|*.iso|所有文件 (*.*)|*.*</value>
+  </data><data name="WorkspaceBuilder_1" xml:space="preserve">
+    <value>DAT 流必须支持 Seek。</value>
+  </data><data name="WorkspaceBuilder_2" xml:space="preserve">
+    <value>datStream 不可读。</value>
+  </data><data name="WorkspaceBuilder_3" xml:space="preserve">
+    <value>DAT 文件不存在</value>
+  </data>
+</root>

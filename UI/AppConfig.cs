@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
-using System.Linq;
 
 namespace GalaxyAngel2Localization.UI
 {
@@ -12,6 +12,9 @@ namespace GalaxyAngel2Localization.UI
         public List<string> ExtractExtensions { get; } = new();
         public Dictionary<string, List<string>> PrePackCommandsPerProject { get; } =
             new(StringComparer.OrdinalIgnoreCase);
+        public string Language { get; set; } = string.Empty;
+
+        bool _languageWasInFile;
 
         public static AppConfig Load(string path)
         {
@@ -20,6 +23,7 @@ namespace GalaxyAngel2Localization.UI
             if (!File.Exists(path))
             {
                 AddDefaultExts(cfg);
+                cfg.Language = CultureInfo.CurrentUICulture.Name;
                 return cfg;
             }
 
@@ -33,14 +37,14 @@ namespace GalaxyAngel2Localization.UI
 
                 if (line.StartsWith("[") && line.EndsWith("]"))
                 {
-                    section = line.Substring(1, line.Length - 2).Trim();
+                    section = line[1..^1].Trim();
                     continue;
                 }
 
                 int eq = line.IndexOf('=');
                 if (eq <= 0) continue;
 
-                var key = line.Substring(0, eq).Trim();
+                var key = line[..eq].Trim();
                 var value = line[(eq + 1)..].Trim();
 
                 if (section == null) continue;
@@ -57,9 +61,17 @@ namespace GalaxyAngel2Localization.UI
                     if (key.Equals("Extensions", StringComparison.OrdinalIgnoreCase))
                         ParseList(value, cfg.ExtractExtensions);
                 }
+                else if (section.Equals("UI", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (key.Equals("Language", StringComparison.OrdinalIgnoreCase))
+                    {
+                        cfg.Language = value;
+                        cfg._languageWasInFile = true;
+                    }
+                }
                 else if (section.StartsWith("PrePack.", StringComparison.OrdinalIgnoreCase))
                 {
-                    var proj = section.Substring("PrePack.".Length).Trim();
+                    var proj = section["PrePack.".Length..].Trim();
                     if (proj.Length == 0) continue;
 
                     if (key.Equals("Commands", StringComparison.OrdinalIgnoreCase))
@@ -77,6 +89,9 @@ namespace GalaxyAngel2Localization.UI
             if (cfg.ExtractExtensions.Count == 0)
                 AddDefaultExts(cfg);
 
+            if (!cfg._languageWasInFile)
+                cfg.Language = CultureInfo.CurrentUICulture.Name;
+
             return cfg;
         }
 
@@ -84,14 +99,15 @@ namespace GalaxyAngel2Localization.UI
         {
             var lines = new List<string>
             {
-                "# GalaxyAngel2Localization config",
-                "",
                 "[Projects]",
                 "Names = [" + string.Join(", ", Projects) + "]",
                 "Current = " + CurrentProject,
                 "",
                 "[Extract]",
                 "Extensions = [" + string.Join(", ", ExtractExtensions) + "]",
+                "",
+                "[UI]",
+                "Language = " + Language,
                 ""
             };
 
