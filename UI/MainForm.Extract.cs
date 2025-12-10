@@ -149,7 +149,7 @@ namespace GalaxyAngel2Localization.UI
                 return;
             }
 
-            var workspaceRoot = Path.Combine(AppContext.BaseDirectory, projectName);
+            var workspaceRoot = Path.Combine(AppPaths.AppRoot, projectName);
             var listPath = Path.Combine(workspaceRoot, "list.json");
             if (!File.Exists(listPath))
             {
@@ -230,7 +230,7 @@ namespace GalaxyAngel2Localization.UI
             HashSet<string> exts,
             Action<string>? logCallback)
         {
-            var workspaceRoot = Path.Combine(AppContext.BaseDirectory, projectName);
+            var workspaceRoot = Path.Combine(AppPaths.AppRoot, projectName);
             var listPath = Path.Combine(workspaceRoot, "list.json");
             var originalRoot = Path.Combine(workspaceRoot, "original");
             var extractRoot = Path.Combine(workspaceRoot, "extract");

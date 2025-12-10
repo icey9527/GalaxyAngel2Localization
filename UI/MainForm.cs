@@ -15,7 +15,7 @@ namespace GalaxyAngel2Localization.UI
         IsoEntry[] _isoEntries = Array.Empty<IsoEntry>();
 
         readonly List<string> _projects = new();
-        readonly string _configIniPath = Path.Combine(AppContext.BaseDirectory, "GA2config.ini");
+        readonly string _configIniPath = Path.Combine(AppPaths.AppRoot, "GA2config.ini");
         AppConfig _config = new();
 
         List<CheckBox> _extractCheckBoxes = new();
@@ -141,7 +141,7 @@ namespace GalaxyAngel2Localization.UI
                 return;
             }
 
-            var workspaceRoot = Path.Combine(AppContext.BaseDirectory, projectName);
+            var workspaceRoot = Path.Combine(AppPaths.AppRoot, projectName);
             var listPath = Path.Combine(workspaceRoot, "list.json");
 
             if (!File.Exists(listPath))

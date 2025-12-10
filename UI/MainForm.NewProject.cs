@@ -71,7 +71,7 @@ namespace GalaxyAngel2Localization.UI
 
             var isoPath = txtIsoPath.Text;
             var imageName = Path.GetFileNameWithoutExtension(isoPath);
-            var workspaceRoot = Path.Combine(AppContext.BaseDirectory, imageName);
+            var workspaceRoot = Path.Combine(AppPaths.AppRoot, imageName);
 
             try
             {
