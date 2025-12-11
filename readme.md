@@ -19,3 +19,7 @@ GA2大部分需要修改的文件都在：**ADV.DAT**、**ALL.DAT**、**SLG.DAT*
 如果你还想编辑PSS视频可以勾选：**STRM_R.DAT**、**STRM_R2.DAT**
 
 </details>
+
+```
+<small>English Translation: GPT5.1 Optimization: NNyarlathotep</small>
+```

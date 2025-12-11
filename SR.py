@@ -103,7 +103,7 @@ def find_strings(text: str):
     def overlaps(start: int, end: int) -> bool:
         return any(not (end <= s or start >= e) for s, e in processed)
 
-    interp_re = re.compile(r'(?<!@)\$"((?:[^"\\]|\\.)*)"')
+    interp_re = re.compile(r'(?<!@)\$"((?:[^"\\{}]|\\.|{[^}]*})*)"')
     interp_matches = list(interp_re.finditer(text))
     i = 0
     while i < len(interp_matches):
