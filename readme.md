@@ -20,6 +20,4 @@ GA2大部分需要修改的文件都在：**ADV.DAT**、**ALL.DAT**、**SLG.DAT*
 
 </details>
 
-```
-<small>English Translation: GPT5.1 Optimization: NNyarlathotep</small>
-```
+<sup>English Translation: GPT5.1 Optimization: NNyarlathotep</sup>
