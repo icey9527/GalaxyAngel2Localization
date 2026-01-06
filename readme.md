@@ -7,6 +7,8 @@ Most files that need modification for GA2 are in: **ADV.DAT**, **ALL.DAT**, **SL
 
 To edit PSS videos, also check: **STRM_R.DAT**, **STRM_R2.DAT**
 
+For editing script files, please use the tools in python_tools.
+
 </details>
 
 <details>
@@ -17,6 +19,8 @@ To edit PSS videos, also check: **STRM_R.DAT**, **STRM_R2.DAT**
 GA2大部分需要修改的文件都在：**ADV.DAT**、**ALL.DAT**、**SLG.DAT**
 
 如果你还想编辑PSS视频可以勾选：**STRM_R.DAT**、**STRM_R2.DAT**
+
+有关脚本文件的编辑，请使用python_tools中的工具。
 
 </details>
 
