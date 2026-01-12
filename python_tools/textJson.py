@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from char import encode_cp932_or_die, make_translation_converter
+
 IMG_BASE = "https://ga3.wbnb.top/face"
 VOICE_BASE = "https://ga3.wbnb.top/advvoice"
 
@@ -38,7 +40,6 @@ FACE_MAP_RE = re.compile(r"^\s*#\s*([0-9A-Fa-f]+)\s*=\s*([^\s;\/]+)")
 
 HEX_KEY_RE = re.compile(r"^\s*([0-9A-Fa-f]+)")          # key 前导 hex
 PAREN_COMMENT_RE = re.compile(r"\([^)]*\)")
-MAP_LINE_RE = re.compile(r"^\s*([0-9A-Fa-f]{2,4})\s*=\s*(.*?)\s*$")
 
 
 def u32(hex8: str) -> int:
@@ -100,10 +101,7 @@ def strip_paren_comments(s: str) -> str:
 
 def read_text_guess(p: Path) -> str:
     data = p.read_bytes()
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        return data.decode("cp932", errors="replace")
+    return data.decode("utf-8")
 
 def iter_txt_files(root: Path) -> List[Path]:
     return sorted([p for p in root.rglob("*.txt") if p.is_file()])
@@ -146,7 +144,7 @@ def load_char_names(tbl_dir: Path) -> Tuple[Dict[int, Dict[int, str]], Dict[int,
         if not TBL_FILE_RE.match(p.name):
             continue
 
-        lines = p.read_text(encoding="cp932", errors="replace").splitlines()
+        lines = p.read_text(encoding="cp932", errors="ignore").splitlines()
 
         cur_id: Optional[int] = None
         cur_names: Dict[int, str] = {}
@@ -435,7 +433,7 @@ def parse_list_txt(list_path: Path) -> Dict[str, str]:
     if not list_path.exists():
         return m
 
-    for raw in list_path.read_text(encoding="cp932", errors="replace").splitlines():
+    for raw in list_path.read_text(encoding="cp932", errors="ignore").splitlines():
         line = raw.strip()
         if not line:
             continue
@@ -461,103 +459,6 @@ def output_json_path(out_root: Path, rel_txt: Path, title: str) -> Path:
     else:
         name = f"{stem}.json"
     return out_root / rel_txt.parent / name
-
-
-# -------- 回写映射表：UTF-16LE --------
-
-def load_writeback_map(map_path: Path) -> Dict[str, int]:
-    """
-    UTF-16LE(BOM/LE 都可)：
-      889F=亚
-    重复定义：保留第一个，后续忽略。
-    """
-    txt = map_path.read_text(encoding="utf-16", errors="replace")
-    out: Dict[str, int] = {}
-
-    for raw in txt.splitlines():
-        line = raw.strip()
-        if not line or line.startswith(";") or line.startswith("//"):
-            continue
-        m = MAP_LINE_RE.match(line)
-        if not m:
-            continue
-
-        hexcode = m.group(1).strip()
-        rhs = m.group(2).strip()
-        rhs = rhs.split(";", 1)[0].split("//", 1)[0].strip()
-        if not rhs:
-            continue
-        if len(rhs) != 1:
-            raise SystemExit(f"码表右侧不是单字符：{line}")
-
-        if rhs in out:
-            continue  # 重复：用第一个
-
-        out[rhs] = int(hexcode, 16)
-
-    return out
-
-def encode_cp932_with_map(s: str, cmap: Optional[Dict[str, int]], strict_map: bool) -> bytes:
-    """
-    性能优化：
-    - 没有 cmap：直接 cp932 strict
-    - 有 cmap：分段编码，只有遇到映射字符才插入指定字节
-    """
-    if cmap is None:
-        return s.encode("cp932")  # strict
-
-    # 快速路径：strict_map=False 且完全不含映射字符 -> 直接 cp932
-    if not strict_map:
-        for ch in s:
-            if ch in cmap:
-                break
-        else:
-            return s.encode("cp932")
-
-    buf = bytearray()
-    bad: Dict[str, int] = {}
-    normal_chunk: List[str] = []
-
-    def flush_normal() -> None:
-        nonlocal normal_chunk
-        if not normal_chunk:
-            return
-        chunk = "".join(normal_chunk)
-        normal_chunk = []
-        try:
-            buf.extend(chunk.encode("cp932"))
-        except UnicodeEncodeError:
-            # 定位坏字符
-            for c in chunk:
-                try:
-                    c.encode("cp932")
-                except UnicodeEncodeError:
-                    bad[c] = ord(c)
-
-    for ch in s:
-        if ch in cmap:
-            flush_normal()
-            code = cmap[ch]
-            if code <= 0xFF:
-                buf.append(code & 0xFF)
-            else:
-                buf.append((code >> 8) & 0xFF)
-                buf.append(code & 0xFF)
-            continue
-
-        if strict_map:
-            bad[ch] = ord(ch)
-            continue
-
-        normal_chunk.append(ch)
-
-    flush_normal()
-
-    if bad:
-        items = ", ".join([f"{c}(U+{u:04X})" for c, u in sorted(bad.items(), key=lambda x: x[1])])
-        raise SystemExit(f"发现无法编码的字符（不在码表且 cp932 不支持，或 strict-map 开启）：{items}")
-
-    return bytes(buf)
 
 
 # -------- d / e 命令 --------
@@ -596,11 +497,9 @@ def build_json_to_txt_map(json_dir: Path) -> Dict[str, Path]:
 def cmd_encode_writeback(
     scripts_in: Path,
     scripts_out: Path,
-    json_dir: Path,
-    map_path: Optional[Path],
-    strict_map: bool,
+    json_dir: Path
 ) -> None:
-    cmap = load_writeback_map(map_path) if (map_path is not None and str(map_path).strip()) else None
+    conv = make_translation_converter()
     mapping = build_json_to_txt_map(json_dir)
 
     missing: List[str] = []
@@ -612,11 +511,9 @@ def cmd_encode_writeback(
             missing.append(txt_rel_posix)
             continue
 
-        raw_bytes = in_txt.read_bytes()
         script = read_text_guess(in_txt)
-        newline = "\r\n" if b"\r\n" in raw_bytes else "\n"
 
-        items = json.loads(jp.read_text(encoding="utf-8", errors="replace"))
+        items = json.loads(jp.read_text(encoding="utf-8", errors="ignore"))
 
         trans_map: Dict[int, str] = {}
         if isinstance(items, list):
@@ -624,7 +521,7 @@ def cmd_encode_writeback(
                 if not isinstance(it, dict):
                     continue
                 tr = it.get("translation")
-                if not isinstance(tr, str) or not tr.strip():
+                if not isinstance(tr, str) or tr == "":
                     continue
                 key = it.get("key", "")
                 if not isinstance(key, str) or not key.strip():
@@ -634,7 +531,8 @@ def cmd_encode_writeback(
                 if not isinstance(cl, int) or cl <= 0:
                     continue
 
-                tr_norm = tr.replace("\r", "").replace("\n", "\\n")
+                tr_norm = tr.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\\n")
+                tr_norm = conv(tr_norm)
 
                 if cl in trans_map and trans_map[cl] != tr_norm:
                     raise SystemExit(f"同一行号出现多个不同翻译：script={txt_rel_posix} line={cl} key={key}")
@@ -642,36 +540,37 @@ def cmd_encode_writeback(
 
         in_code = False
         code_line = 0
-        out_lines: List[str] = []
+        out_chunks: List[str] = []
 
-        for raw in script.splitlines():
+        for raw in script.splitlines(keepends=True):
             line = raw.rstrip("\r\n")
+            eol = raw[len(line):]
 
             if line.strip() == "[CODE]":
                 in_code = True
                 code_line = 0
-                out_lines.append(line)
+                out_chunks.append(line + eol)
                 continue
 
             if in_code and is_section_header(line) and line.strip() != "[CODE]":
                 in_code = False
-                out_lines.append(line)
+                out_chunks.append(line + eol)
                 continue
 
             if not in_code:
-                out_lines.append(line)
+                out_chunks.append(line + eol)
                 continue
 
             code_line += 1
 
             if is_text_param_line(line) and code_line in trans_map:
                 leading_ws = re.match(r"^(\s*)", raw).group(1) if raw else ""
-                out_lines.append(f"{leading_ws}{trans_map[code_line]}")
+                out_chunks.append(f"{leading_ws}{trans_map[code_line]}{eol}")
             else:
-                out_lines.append(line)
+                out_chunks.append(line + eol)
 
-        out_text = newline.join(out_lines) + newline
-        out_bytes = encode_cp932_with_map(out_text, cmap, strict_map=strict_map)
+        out_text = "".join(out_chunks)
+        out_bytes =  out_text.encode("utf-8")
 
         out_path = scripts_out / txt_rel
         out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -690,52 +589,48 @@ def print_help_and_exit(code: int = 0) -> None:
     msg = (
         "用法：\n"
         "  解码/提取到 JSON：\n"
-        "    python textJson.py d <脚本txt目录> <json输出目录> <tbl目录> [list.txt]\n"
+        "    python textJson.py d <脚本txt目录> <json输出目录> <extract目录>\n"
         "\n"
         "  编码/写回脚本（按 json 推导 txt：去掉括号，后缀改 txt）：\n"
         "    python textJson.py e <脚本txt目录> <写回输出目录> <json目录> [映射码表]\n"
         "\n"
         "可选参数：\n"
         "  映射码表：UTF-16LE，格式：889F=亚\n"
-        "  --strict-map：开启后（且提供码表时）字符不在码表里就报错\n"
     )
     raise SystemExit(msg if code == 0 else msg)
 
+
 def main() -> None:
     argv = sys.argv[1:]
-    strict_map = False
 
     rest: List[str] = []
     for a in argv:
         if a in ("-h", "--help", "/?"):
             print_help_and_exit(0)
-        elif a == "--strict-map":
-            strict_map = True
         else:
             rest.append(a)
 
     if len(rest) < 4:
         raise SystemExit("参数不完整。\n" + (
-            "用法：python textJson.py d <脚本txt目录> <json输出目录> <tbl目录> [list.txt]\n"
-            "   或：python textJson.py e <脚本txt目录> <写回输出目录> <json目录> [映射码表]\n"
+            "用法：python textJson.py d <脚本txt目录> <json输出目录> <extract目录>\n"
+            "   或：python textJson.py e <脚本txt目录> <写回输出目录> <json目录>\n"
         ))
 
     mode = rest[0].lower()
     inp = Path(rest[1])
     out = Path(rest[2])
     third = Path(rest[3])
-    fourth = Path(rest[4]) if len(rest) >= 5 and rest[4].strip() else None
 
     out.mkdir(parents=True, exist_ok=True)
 
     if mode == "d":
-        tbl_dir = third
-        list_txt = fourth
+        extract_dir = third
+        tbl_dir = extract_dir / "adv"
+        list_txt = extract_dir / "adv" / "scn" / "list.txt"
         cmd_decode_extract(inp, out, tbl_dir, list_txt)
     elif mode == "e":
         json_dir = third
-        map_path = fourth
-        cmd_encode_writeback(inp, out, json_dir, map_path, strict_map=strict_map)
+        cmd_encode_writeback(inp, out, json_dir)
     else:
         raise SystemExit("mode 必须是 d 或 e。\n用法：python textJson.py d ... 或 python textJson.py e ...\n")
 
