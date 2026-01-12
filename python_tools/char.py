@@ -2,6 +2,37 @@ import re
 import sys
 from pathlib import Path
 
+BADCHARS_PATH = Path("badchars.txt")
+
+def log_bad_chars(chars, path: Path = BADCHARS_PATH) -> None:
+    """
+    chars: 可迭代的字符（例如 bad.keys()）
+    追加写入 path；一行一个；自动去重；只写字符本身。
+    """
+    # 读已有，做去重
+    existing: set[str] = set()
+    if path.exists():
+        existing = set(path.read_text(encoding="utf-8", errors="ignore").splitlines())
+
+    # 过滤空行，保持单字符
+    new_items = []
+    for ch in chars:
+        if not ch:
+            continue
+        # 你这里基本都是单字符；保险起见只取原样
+        if ch not in existing:
+            new_items.append(ch)
+            existing.add(ch)
+
+    if not new_items:
+        return
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as f:
+        for ch in new_items:
+            f.write(ch + "\n")
+
+
 MAP_LINE_RE = re.compile(r"^\s*([0-9A-Fa-f]{2,4})\s*=\s*(.+?)\s*$")
 MAP_START = 0x889F
 MAP_PATH = Path('font.tbl')
@@ -10,9 +41,7 @@ DEFAULT_REPLACE_RULES: dict[str, str] = {
     "—": "─",
     "～": "〜",
     "“": "「",
-    "”": "」",
-    "：": "：",
-    "；": "；",
+    "”": "」"
 }
 
 def encode_cp932_or_die(s: str) -> bytes:
@@ -26,8 +55,9 @@ def encode_cp932_or_die(s: str) -> bytes:
             except UnicodeEncodeError:
                 bad[ch] = ord(ch)
         if bad:
-            items = ", ".join(f"{c}(U+{u:04X})" for c, u in sorted(bad.items(), key=lambda x: x[1]))
-            print(items, file=sys.stderr)
+            #items = ", ".join(f"{c}(U+{u:04X})" for c, u in sorted(bad.items(), key=lambda x: x[1]))
+            #print(items, file=sys.stderr)
+            log_bad_chars(sorted(bad.keys(), key=ord))
         return s.encode("cp932", errors="ignore")
 
 def cp932_code(ch: str) -> int | None:
@@ -90,8 +120,9 @@ def map_translation(t: str, rhs_to_proxy: dict[str, str]) -> str:
             else:
                 out.append(ch)
         if bad:
-            items = ", ".join(f"{c}(U+{u:04X})" for c, u in sorted(bad.items(), key=lambda x: x[1]))
-            print(items, file=sys.stderr)
+            #items = ", ".join(f"{c}(U+{u:04X})" for c, u in sorted(bad.items(), key=lambda x: x[1]))
+            #print(items, file=sys.stderr)
+            log_bad_chars(sorted(bad.keys(), key=ord))
         return "".join(out)
     out: list[str] = []
     bad: dict[str, int] = {}
@@ -107,6 +138,7 @@ def map_translation(t: str, rhs_to_proxy: dict[str, str]) -> str:
         else:
             out.append(proxy)
     if bad:
-        items = ", ".join(f"{c}(U+{u:04X})" for c, u in sorted(bad.items(), key=lambda x: x[1]))
-        print(items, file=sys.stderr)
+        #items = ", ".join(f"{c}(U+{u:04X})" for c, u in sorted(bad.items(), key=lambda x: x[1]))
+        #print(items, file=sys.stderr)
+        log_bad_chars(sorted(bad.keys(), key=ord))
     return "".join(out)

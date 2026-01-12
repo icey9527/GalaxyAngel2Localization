@@ -1,5 +1,6 @@
-chcp 65001
+@echo off 
 setlocal
+chcp 65001
 
 if not exist extract\ (
   echo [ERROR] 未找到目录: %CD%\extract
@@ -8,6 +9,7 @@ if not exist extract\ (
 
 set "TOOLSDIR=%~dp0"
 
+del badchars.txt
 python %TOOLSDIR%tbl.py e extract modified utf8\TBL.json
 python %TOOLSDIR%textjson.py e Raw\TXT Raw\RE_TXT utf8\剧情文本
 python %TOOLSDIR%asb.py e Raw\RE_TXT modified\adv\scn

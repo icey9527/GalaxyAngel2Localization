@@ -1,5 +1,6 @@
-chcp 65001
+@echo off 
 setlocal
+chcp 65001
 
 if not exist extract\ (
   echo [ERROR] 未找到目录: "%CD%\extract"
