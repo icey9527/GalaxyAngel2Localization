@@ -195,7 +195,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
 
             long stringPoolOffset = Align16(regionStart);
             long stringPoolSize = stringPoolBytes.Length;
-            long dataOffset = Align16(stringPoolOffset + stringPoolSize);
+            long dataOffset = AlignData2048(stringPoolOffset + stringPoolSize);
 
             var fstsOffsets = new long[blockCount];
             var fstsSizes = new int[blockCount];
@@ -294,7 +294,6 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                     if (e.IsDirectory || e.FullPath == null)
                         continue;
 
-                    cursor = Align16(cursor);
                     fsOut.Position = cursor;
 
                     if (!sources.TryGetValue(e.FullPath, out var src))
@@ -307,7 +306,9 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                     e.UncompressedSize = info.UncompressedSize;
                     table2List[i] = e;
 
-                    cursor += info.CompressedSize;
+                    cursor += info.StoredSize;
+
+                    cursor = AlignData2048(cursor); // 0x800 对齐
                 }
 
                 fsOut.Position = table2Offset;
@@ -342,7 +343,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             for (int bi = 0; bi < blockCount; bi++)
             {
                 var block = blocks[bi];
-                cursor = Align16(cursor);
+                cursor = AlignData2048(cursor);
                 long fstsOffset = cursor;
                 fsOut.Position = fstsOffset;
 
@@ -394,7 +395,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                     fsOut.Position = dataLocalCursor;
 
                     var info = WriteDataFromSource(fsOut, src);
-                    dataLocalCursor += info.CompressedSize;
+                    dataLocalCursor += info.StoredSize;
 
                     long entPos = entriesBase + i * 16;
                     fsOut.Position = entPos;

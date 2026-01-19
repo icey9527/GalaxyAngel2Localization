@@ -32,13 +32,15 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             public readonly long Offset;
             public readonly int CompressedSize;
             public readonly int UncompressedSize;
+            public readonly int StoredSize;
             public readonly bool UsedModified;
 
-            public PathDataInfo(long offset, int compressedSize, int uncompressedSize, bool usedModified)
+            public PathDataInfo(long offset, int compressedSize, int uncompressedSize, int storedSize, bool usedModified)
             {
                 Offset = offset;
                 CompressedSize = compressedSize;
                 UncompressedSize = uncompressedSize;
+                StoredSize = storedSize;
                 UsedModified = usedModified;
             }
         }        
@@ -224,12 +226,14 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             long offset = fsOut.Position;
             int compSize;
             int decompSize;
+            int storedSize;
             bool usedModified = false;
 
             if (src.HasModified && src.CompBuffer != null)
             {
                 fsOut.Write(src.CompBuffer, 0, src.CompSize);
                 usedModified = true;
+                storedSize = src.CompSize;
 
                 bool treatAsCompressed = !src.HasOriginal || src.OrigCompressed;
                 if (treatAsCompressed)
@@ -258,6 +262,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
 
                 int len = (int)fs.Length;
                 fs.CopyTo(fsOut);
+                storedSize = len;
 
                 if (src.OrigCompressed)
                 {
@@ -271,7 +276,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                 }
             }
 
-            return new PathDataInfo(offset, compSize, decompSize, usedModified);
+            return new PathDataInfo(offset, compSize, decompSize, storedSize, usedModified);
         }
 
         static string NormalizePath(string path)

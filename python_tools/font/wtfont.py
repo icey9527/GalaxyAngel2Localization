@@ -241,7 +241,7 @@ class TileEncoder:
             tile_gray = flipped
 
         # gamma + 量化到 4bpp (0..15)
-        gamma = 0.5  # 0.7~0.9 自己试
+        gamma = 1  # 0.7~0.9 自己试
         tile_4bpp = bytearray(
             min(15, max(0, int((((v / 255.0) ** gamma) * 15) + 0.5)))
             for v in tile_gray

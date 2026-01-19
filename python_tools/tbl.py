@@ -59,7 +59,9 @@ def read_tbl(path: Path) -> dict[str, dict[str, str]]:
             continue
         if sec and "=" in line:
             k, v = line.split("=", 1)
-            out[sec][k.strip()] = v.strip()
+            if len(v) >= 2 and v[0] == '"' and v[-1] == '"':
+                v = v[1:-1]
+            out[sec][k.strip()] = v
     return out
 
 
@@ -115,6 +117,8 @@ def update_tbl_text(text: str, updates: dict[str, dict[str, str]]) -> str:
 
         new_left = left
         new_val = updates[sec][key]
+        if " " in new_val:
+            new_val = '"' + new_val + '"'
 
         if sep:
             out.append(new_left + "=" + new_val + "\t" + tail + newline)
@@ -130,7 +134,7 @@ def writeback(src_dir: Path, out_dir: Path, json_path: Path, map_path: Path | No
 
     upd: dict[str, dict[str, dict[str, str]]] = {}
     for o in data:
-        t = (o.get("translation") or "").strip()
+        t = (o.get("translation") or "")
         if not t:
             continue
         t = conv(t)
