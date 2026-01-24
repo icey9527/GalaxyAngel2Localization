@@ -2,7 +2,7 @@
 for /f "tokens=2 delims=: " %%a in ('chcp') do set "oldcp=%%a"
 chcp 65001 >nul
 
-set "BASE=I:\汉化\银河天使2"
+set "BASE=%~dp0..\银河天使2"
 
 set /a n=0
 for /f "delims=" %%d in ('dir /b /ad ^| findstr /v /b /c:_') do set /a n+=1 & set "d[!n!]=%%d" & echo !n!. %%d
