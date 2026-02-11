@@ -1,7 +1,6 @@
 import os, sys, json, struct, re
 from pathlib import Path
 from collections import deque
-import textJson
 from char import encode_cp932_or_die, make_translation_converter
 
 def u32(b, o): return struct.unpack_from("<I", b, o)[0]
