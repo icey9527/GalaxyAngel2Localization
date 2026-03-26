@@ -60,10 +60,9 @@ namespace GalaxyAngel2Localization.Utils
             }
             else
             {
-                bmp32 = new Bitmap(width, height, PixelFormat.Format32bppArgb);
-                using (var g = Graphics.FromImage(bmp32))
-                    g.DrawImage(bmpSrc, 0, 0, width, height);
+                bmp32 = bmpSrc.Clone(new SDRectangle(0, 0, width, height), PixelFormat.Format32bppArgb);
                 bmp = bmp32;
+
             }
 
             var rect = new SDRectangle(0, 0, width, height);
