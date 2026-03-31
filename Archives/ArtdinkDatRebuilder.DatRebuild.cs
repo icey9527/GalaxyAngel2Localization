@@ -195,7 +195,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
 
             long stringPoolOffset = Align16(regionStart);
             long stringPoolSize = stringPoolBytes.Length;
-            long dataOffset = Align16(stringPoolOffset + stringPoolSize);
+            long dataOffset = AlignData2048(stringPoolOffset + stringPoolSize);
 
             var fstsOffsets = new long[blockCount];
             var fstsSizes = new int[blockCount];
@@ -294,7 +294,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                     if (e.IsDirectory || e.FullPath == null)
                         continue;
 
-                    cursor = Align16(cursor);
+                    cursor = AlignData2048(cursor);
                     fsOut.Position = cursor;
 
                     if (!sources.TryGetValue(e.FullPath, out var src))
@@ -342,7 +342,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             for (int bi = 0; bi < blockCount; bi++)
             {
                 var block = blocks[bi];
-                cursor = Align16(cursor);
+                cursor = AlignData2048(cursor);
                 long fstsOffset = cursor;
                 fsOut.Position = fstsOffset;
 
@@ -375,7 +375,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                 fsOut.Position = stringPoolPos;
                 WriteBytes(fsOut, fstsSpBytes);
                 long afterSp = fsOut.Position;
-                long dataLocalCursor = Align16(afterSp);
+                long dataLocalCursor = AlignData2048(afterSp);
 
                 fsOut.Position = fstsOffset + 0x0C;
                 WriteUInt32(fsOut, (uint)(stringPoolPos - fstsOffset));
@@ -389,7 +389,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                     if (!sources.TryGetValue(path, out var src))
                         throw new InvalidOperationException("缺少路径源信息(FSTS): " + path);
 
-                    dataLocalCursor = Align16(dataLocalCursor);
+                    dataLocalCursor = AlignData2048(dataLocalCursor);
                     long localDataOff = dataLocalCursor - fstsOffset;
                     fsOut.Position = dataLocalCursor;
 
