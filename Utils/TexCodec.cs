@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using SixLabors.ImageSharp.Processing.Processors.Quantization;
@@ -79,9 +80,6 @@ namespace GalaxyAngel2Localization.Utils
                 {
                     var clut = metadata.Clut ?? throw new InvalidDataException("Indexed TEX has no CLUT entry.");
                     int colorCount = uses8 ? 256 : 16;
-                    int declaredColors = checked(clut.Width * clut.Height);
-                    if (declaredColors != colorCount)
-                        throw new InvalidDataException($"Expected a {colorCount}-color CLUT but metadata declares {declaredColors} colors.");
                     int paletteOffset = GetAbsoluteOffset(metadata.BaseOffset, clut.RelativeOffset);
                     int paletteLength = checked(colorCount * 4);
                     EnsureRange(data.Length, paletteOffset, paletteLength, "CLUT");
@@ -126,6 +124,7 @@ namespace GalaxyAngel2Localization.Utils
                     int sourceOffset = GetAbsoluteOffset(metadata.BaseOffset, sprite.RelativeOffset);
                     int rowSize = GetRowSize(sprite.Psm, sprite.Width);
                     int copyWidth = Math.Min(sprite.Width, width);
+                    var sourceRow = new byte[rowSize];
                     var decodedRow = new byte[copyWidth * 4];
 
                     for (int y = 0; y < sprite.Height; y++)
@@ -134,14 +133,14 @@ namespace GalaxyAngel2Localization.Utils
                         if (destinationY >= height)
                             break;
 
-                        byte[] row = data.AsSpan(sourceOffset + y * rowSize, rowSize).ToArray();
+                        Buffer.BlockCopy(data, sourceOffset + y * rowSize, sourceRow, 0, rowSize);
                         switch (sprite.Psm)
                         {
-                            case 0x00: ImageUtils.ConvertRowRgba32ToBgraWithPs2Alpha(row, decodedRow, copyWidth); break;
-                            case 0x01: ImageUtils.ConvertRowRgb24ToBgra(row, decodedRow, copyWidth); break;
-                            case 0x02: ImageUtils.ConvertRowRgb555ToBgra(row, decodedRow, copyWidth); break;
-                            case 0x13: ImageUtils.ConvertRowIndexed8ToBgra(row, decodedRow, copyWidth, palette8!); break;
-                            case 0x14: ImageUtils.ConvertRowIndexed4ToBgra(row, decodedRow, copyWidth, palette4!); break;
+                            case 0x00: ImageUtils.ConvertRowRgba32ToBgraWithPs2Alpha(sourceRow, decodedRow, copyWidth); break;
+                            case 0x01: ImageUtils.ConvertRowRgb24ToBgra(sourceRow, decodedRow, copyWidth); break;
+                            case 0x02: ImageUtils.ConvertRowRgb555ToBgra(sourceRow, decodedRow, copyWidth); break;
+                            case 0x13: ImageUtils.ConvertRowIndexed8ToBgra(sourceRow, decodedRow, copyWidth, palette8!); break;
+                            case 0x14: ImageUtils.ConvertRowIndexed4ToBgra(sourceRow, decodedRow, copyWidth, palette4!); break;
                         }
                         ImageUtils.CopyRowToBitmap(bitmapData, destinationY, decodedRow, stride);
                     }
@@ -206,7 +205,8 @@ namespace GalaxyAngel2Localization.Utils
             try
             {
                 using var image = SixLabors.ImageSharp.Image.Load<Rgba32>(pngPath);
-                if ((uint)image.Width != metadata.RealWidth || (uint)image.Height != metadata.RealHeight)
+                if ((metadata.RealWidth != 0 && (uint)image.Width != metadata.RealWidth) ||
+                    (metadata.RealHeight != 0 && (uint)image.Height != metadata.RealHeight))
                     throw new InvalidDataException(
                         $"PNG dimensions {image.Width}x{image.Height} do not match tex.xml {metadata.RealWidth}x{metadata.RealHeight}.");
 
@@ -214,8 +214,8 @@ namespace GalaxyAngel2Localization.Utils
                 var sourcePixels = new Rgba32[checked(image.Width * image.Height)];
                 image.CopyPixelDataTo(sourcePixels);
 
-                texData = new byte[metadata.FileLength];
-                WriteHeader(texData, metadata);
+                texData = new byte[CalculateFileLength(metadata)];
+                WriteHeader(texData, metadata, image.Width, image.Height);
 
                 IndexedPixels? indexed = BuildIndexedPixels(sourcePixels, image.Width, image.Height, metadata);
                 WriteSprites(texData, sourcePixels, image.Width, image.Height, metadata, indexed);
@@ -259,10 +259,8 @@ namespace GalaxyAngel2Localization.Utils
             if (!uses8 && !uses4)
                 return null;
 
-            int colorCount = uses4 ? 16 : 256;
-            var clut = metadata.Clut ?? throw new InvalidDataException("Indexed TEX has no CLUT metadata.");
-            if (checked(clut.Width * clut.Height) != colorCount)
-                throw new InvalidDataException($"Expected a {colorCount}-color CLUT in tex.xml.");
+            int colorCount = GetPaletteColorCount(metadata);
+            _ = metadata.Clut ?? throw new InvalidDataException("Indexed TEX has no CLUT metadata.");
 
             var virtualPixels = new Rgba32[checked(virtualWidth * virtualHeight)];
             int spriteY = 0;
@@ -334,7 +332,7 @@ namespace GalaxyAngel2Localization.Utils
             return true;
         }
 
-        static void WriteHeader(byte[] output, TexFileMetadata metadata)
+        static void WriteHeader(byte[] output, TexFileMetadata metadata, int imageWidth, int imageHeight)
         {
             output[0] = (byte)'T';
             output[1] = (byte)'E';
@@ -342,18 +340,17 @@ namespace GalaxyAngel2Localization.Utils
             output[3] = (byte)' ';
             WriteUInt16(output, 0x04, metadata.Cw);
             WriteUInt16(output, 0x06, metadata.Ch);
-            metadata.Unknown1.CopyTo(output, 0x08);
-            WriteUInt32(output, 0x14, metadata.RealWidth);
-            WriteUInt32(output, 0x18, metadata.RealHeight);
-            metadata.Unknown2.CopyTo(output, 0x1C);
+            metadata.Unknown.CopyTo(output, 0x08);
+            WriteUInt32(output, 0x14, checked((uint)imageWidth));
+            WriteUInt32(output, 0x18, checked((uint)imageHeight));
             WriteUInt32(output, 0x20, metadata.BaseOffset);
             WriteUInt16(output, 0x24, checked((ushort)metadata.Sprites.Count));
-            WriteUInt16(output, 0x26, metadata.HasClut);
+            WriteUInt16(output, 0x26, metadata.Clut == null ? (ushort)0 : (ushort)1);
 
             for (int i = 0; i < metadata.Sprites.Count; i++)
                 WriteEntry(output, 0x28 + i * 20, metadata.Sprites[i]);
             if (metadata.Clut != null)
-                WriteEntry(output, 0x28 + metadata.Sprites.Count * 20, metadata.Clut);
+                WriteClutEntry(output, 0x28 + metadata.Sprites.Count * 20, metadata.Clut, GetPaletteColorCount(metadata));
         }
 
         static void WriteSprites(
@@ -443,24 +440,53 @@ namespace GalaxyAngel2Localization.Utils
 
         static void ValidateMetadata(TexFileMetadata metadata)
         {
-            if (metadata.FileLength < 0x28 || metadata.Unknown1.Length != 12 || metadata.Unknown2.Length != 4)
+            if (metadata.Unknown.Length != 12)
                 throw new InvalidDataException("Invalid TEX header metadata.");
-            if (metadata.RealWidth == 0 || metadata.RealHeight == 0 || metadata.Sprites.Count == 0)
-                throw new InvalidDataException("Invalid TEX dimensions or sprite count in tex.xml.");
-
-            int tableLength = checked(0x28 + (metadata.Sprites.Count + (metadata.HasClut == 0 ? 0 : 1)) * 20);
-            if (tableLength > metadata.FileLength)
-                throw new InvalidDataException("TEX entry table extends beyond the recorded file length.");
-            if ((metadata.HasClut != 0) != (metadata.Clut != null))
-                throw new InvalidDataException("CLUT presence does not match hasClut in tex.xml.");
+            if (metadata.Sprites.Count == 0)
+                throw new InvalidDataException("No TEX sprites were found in tex.xml.");
 
             foreach (var sprite in metadata.Sprites)
-            {
                 _ = TexDecoder.GetRowSize(sprite.Psm, sprite.Width);
+
+            bool indexed = metadata.Sprites.Any(x => x.Psm is 0x13 or 0x14);
+            if (indexed != (metadata.Clut != null))
+                throw new InvalidDataException("CLUT presence does not match the sprite pixel format.");
+            if (indexed)
+                _ = GetPaletteColorCount(metadata);
+        }
+
+        static int CalculateFileLength(TexFileMetadata metadata)
+        {
+            int tableLength = checked(0x28 + (metadata.Sprites.Count + (metadata.Clut == null ? 0 : 1)) * 20);
+            int length = tableLength;
+            foreach (var sprite in metadata.Sprites)
+            {
                 int offset = TexDecoder.GetAbsoluteOffset(metadata.BaseOffset, sprite.RelativeOffset);
-                int length = checked(TexDecoder.GetRowSize(sprite.Psm, sprite.Width) * sprite.Height);
-                TexDecoder.EnsureRange(metadata.FileLength, offset, length, "Sprite");
+                if (offset < tableLength)
+                    throw new InvalidDataException("Sprite data overlaps the TEX entry table.");
+                int dataLength = checked(TexDecoder.GetRowSize(sprite.Psm, sprite.Width) * sprite.Height);
+                length = Math.Max(length, checked(offset + dataLength));
             }
+
+            if (metadata.Clut != null)
+            {
+                int offset = TexDecoder.GetAbsoluteOffset(metadata.BaseOffset, metadata.Clut.RelativeOffset);
+                if (offset < tableLength)
+                    throw new InvalidDataException("CLUT data overlaps the TEX entry table.");
+                length = Math.Max(length, checked(offset + GetPaletteColorCount(metadata) * 4));
+            }
+            return length;
+        }
+
+        static int GetPaletteColorCount(TexFileMetadata metadata)
+        {
+            bool uses8 = metadata.Sprites.Any(x => x.Psm == 0x13);
+            bool uses4 = metadata.Sprites.Any(x => x.Psm == 0x14);
+            if (uses8 && uses4)
+                throw new InvalidDataException("Mixed 4bpp and 8bpp sprites cannot share one TEX CLUT.");
+            if (uses8) return 256;
+            if (uses4) return 16;
+            throw new InvalidDataException("TEX has CLUT metadata but no indexed sprite.");
         }
 
         static void WriteEntry(byte[] output, int offset, TexEntryMetadata entry)
@@ -468,13 +494,27 @@ namespace GalaxyAngel2Localization.Utils
             WriteUInt32(output, offset, entry.RelativeOffset);
             WriteUInt16(output, offset + 4, entry.Tbp);
             output[offset + 6] = entry.Psm;
-            output[offset + 7] = entry.Unknown;
+            output[offset + 7] = 0;
             WriteUInt16(output, offset + 8, entry.Tbw);
             WriteUInt16(output, offset + 10, entry.SharedVram);
             WriteUInt16(output, offset + 12, entry.OffsetX);
             WriteUInt16(output, offset + 14, entry.OffsetY);
             WriteUInt16(output, offset + 16, entry.Width);
             WriteUInt16(output, offset + 18, entry.Height);
+        }
+
+        static void WriteClutEntry(byte[] output, int offset, TexEntryMetadata entry, int colorCount)
+        {
+            WriteUInt32(output, offset, entry.RelativeOffset);
+            WriteUInt16(output, offset + 4, entry.Tbp);
+            output[offset + 6] = 0;
+            output[offset + 7] = 0;
+            WriteUInt16(output, offset + 8, entry.Tbw);
+            WriteUInt16(output, offset + 10, entry.SharedVram);
+            WriteUInt16(output, offset + 12, entry.OffsetX);
+            WriteUInt16(output, offset + 14, entry.OffsetY);
+            WriteUInt16(output, offset + 16, colorCount == 256 ? (ushort)16 : (ushort)8);
+            WriteUInt16(output, offset + 18, colorCount == 256 ? (ushort)16 : (ushort)2);
         }
 
         static byte EncodePs2Alpha(byte alpha) => alpha == 0 ? (byte)0 : (byte)((alpha + 1) / 2);

@@ -15,7 +15,6 @@ namespace GalaxyAngel2Localization.Utils
         public uint RelativeOffset { get; init; }
         public ushort Tbp { get; init; }
         public byte Psm { get; init; }
-        public byte Unknown { get; init; }
         public ushort Tbw { get; init; }
         public ushort SharedVram { get; init; }
         public ushort OffsetX { get; init; }
@@ -27,22 +26,21 @@ namespace GalaxyAngel2Localization.Utils
     internal sealed class TexFileMetadata
     {
         public string Path { get; init; } = string.Empty;
-        public int FileLength { get; init; }
         public ushort Cw { get; init; }
         public ushort Ch { get; init; }
-        public byte[] Unknown1 { get; init; } = Array.Empty<byte>();
+        public byte[] Unknown { get; init; } = Array.Empty<byte>();
+
+        // Runtime-only values read from TEX or inferred from the PNG.
         public uint RealWidth { get; init; }
         public uint RealHeight { get; init; }
-        public byte[] Unknown2 { get; init; } = Array.Empty<byte>();
-        public uint BaseOffset { get; init; }
-        public ushort HasClut { get; init; }
+        public uint BaseOffset { get; init; } = 0x20;
+
         public IReadOnlyList<TexEntryMetadata> Sprites { get; init; } = Array.Empty<TexEntryMetadata>();
         public TexEntryMetadata? Clut { get; init; }
     }
 
     internal sealed class TexMetadataDocument
     {
-        const int CurrentVersion = 1;
         readonly Dictionary<string, TexFileMetadata> _files;
 
         public TexMetadataDocument(IEnumerable<TexFileMetadata> files)
@@ -52,9 +50,9 @@ namespace GalaxyAngel2Localization.Utils
             {
                 string path = NormalizePath(file.Path);
                 if (path.Length == 0)
-                    throw new InvalidDataException("TEX metadata contains an empty path.");
+                    throw new InvalidDataException("tex.xml contains an empty path.");
                 if (!_files.TryAdd(path, file))
-                    throw new InvalidDataException($"TEX metadata contains a duplicate path: {path}");
+                    throw new InvalidDataException($"tex.xml contains a duplicate path: {path}");
             }
         }
 
@@ -73,26 +71,20 @@ namespace GalaxyAngel2Localization.Utils
                 throw new InvalidDataException($"Unable to read tex.xml: {ex.Message}", ex);
             }
 
-            var root = document.Root;
-            if (root == null || root.Name != "texMetadata")
-                throw new InvalidDataException("tex.xml root element must be <texMetadata>.");
-            if (ReadInt(root, "version") != CurrentVersion)
-                throw new InvalidDataException($"Unsupported tex.xml version; expected {CurrentVersion}.");
+            XElement? root = document.Root;
+            if (root == null || root.Name != "tex")
+                throw new InvalidDataException("tex.xml root element must be <tex>.");
 
-            var files = new List<TexFileMetadata>();
-            foreach (var element in root.Elements("file"))
-                files.Add(ReadFile(element));
-
-            return new TexMetadataDocument(files);
+            return new TexMetadataDocument(root.Elements("file").Select(ReadFile));
         }
 
         public static void Save(string path, IEnumerable<TexFileMetadata> files)
         {
-            var root = new XElement("texMetadata", new XAttribute("version", CurrentVersion));
+            var root = new XElement("tex");
             foreach (var file in files.OrderBy(x => NormalizePath(x.Path), StringComparer.OrdinalIgnoreCase))
                 root.Add(WriteFile(file));
 
-            var dir = System.IO.Path.GetDirectoryName(path);
+            string? dir = System.IO.Path.GetDirectoryName(path);
             if (!string.IsNullOrEmpty(dir))
                 Directory.CreateDirectory(dir);
 
@@ -103,11 +95,11 @@ namespace GalaxyAngel2Localization.Utils
                 {
                     Encoding = new UTF8Encoding(false),
                     Indent = true,
-                    NewLineChars = Environment.NewLine
+                    NewLineChars = Environment.NewLine,
+                    OmitXmlDeclaration = true
                 };
                 using (var writer = XmlWriter.Create(tempPath, settings))
-                    new XDocument(new XDeclaration("1.0", "utf-8", null), root).Save(writer);
-
+                    new XDocument(root).Save(writer);
                 File.Move(tempPath, path, true);
             }
             finally
@@ -119,47 +111,22 @@ namespace GalaxyAngel2Localization.Utils
 
         static TexFileMetadata ReadFile(XElement element)
         {
-            string path = NormalizePath(ReadString(element, "path"));
+            string path = NormalizePath(ReadRequired(element, "path"));
             try
             {
-                var sprites = element.Elements("sprite")
-                    .Select(x => new
-                    {
-                        Index = ReadInt(x, "index"),
-                        Entry = ReadEntry(x)
-                    })
-                    .OrderBy(x => x.Index)
-                    .ToArray();
+                var sprites = element.Elements("sprite").Select(x => ReadEntry(x, false)).ToArray();
+                if (sprites.Length == 0)
+                    throw new InvalidDataException("No sprite entries were found.");
 
-                for (int i = 0; i < sprites.Length; i++)
-                {
-                    if (sprites[i].Index != i)
-                        throw new InvalidDataException("Sprite indices must be contiguous and start at zero.");
-                }
-
-                ushort spriteCount = ReadUInt16(element, "sprites");
-                if (sprites.Length != spriteCount)
-                    throw new InvalidDataException($"Expected {spriteCount} sprites but found {sprites.Length}.");
-
-                ushort hasClut = ReadUInt16(element, "hasClut");
-                var clutElement = element.Element("clut");
-                if ((hasClut != 0) != (clutElement != null))
-                    throw new InvalidDataException("CLUT presence does not match hasClut.");
-
+                XElement? clut = element.Element("clut");
                 return new TexFileMetadata
                 {
                     Path = path,
-                    FileLength = ReadInt(element, "fileLength"),
                     Cw = ReadUInt16(element, "cw"),
                     Ch = ReadUInt16(element, "ch"),
-                    Unknown1 = ReadHex(element, "unknown1", 12),
-                    RealWidth = ReadUInt32(element, "rw"),
-                    RealHeight = ReadUInt32(element, "rh"),
-                    Unknown2 = ReadHex(element, "unknown2", 4),
-                    BaseOffset = ReadUInt32(element, "baseOffset"),
-                    HasClut = hasClut,
-                    Sprites = sprites.Select(x => x.Entry).ToArray(),
-                    Clut = clutElement == null ? null : ReadEntry(clutElement)
+                    Unknown = ReadHex(element, "unknown", 12),
+                    Sprites = sprites,
+                    Clut = clut == null ? null : ReadEntry(clut, true)
                 };
             }
             catch (Exception ex) when (ex is FormatException or OverflowException or InvalidDataException)
@@ -172,75 +139,65 @@ namespace GalaxyAngel2Localization.Utils
         {
             var element = new XElement("file",
                 new XAttribute("path", NormalizePath(file.Path)),
-                new XAttribute("fileLength", file.FileLength),
                 new XAttribute("cw", file.Cw),
                 new XAttribute("ch", file.Ch),
-                new XAttribute("rw", file.RealWidth),
-                new XAttribute("rh", file.RealHeight),
-                new XAttribute("baseOffset", file.BaseOffset),
-                new XAttribute("sprites", file.Sprites.Count),
-                new XAttribute("hasClut", file.HasClut),
-                new XAttribute("unknown1", Convert.ToHexString(file.Unknown1)),
-                new XAttribute("unknown2", Convert.ToHexString(file.Unknown2)));
+                new XAttribute("unknown", Convert.ToHexString(file.Unknown)));
 
-            for (int i = 0; i < file.Sprites.Count; i++)
-                element.Add(WriteEntry("sprite", file.Sprites[i], i));
+            foreach (var sprite in file.Sprites)
+                element.Add(WriteEntry("sprite", sprite, false));
             if (file.Clut != null)
-                element.Add(WriteEntry("clut", file.Clut, null));
+                element.Add(WriteEntry("clut", file.Clut, true));
             return element;
         }
 
-        static XElement WriteEntry(string name, TexEntryMetadata entry, int? index)
+        static XElement WriteEntry(string name, TexEntryMetadata entry, bool isClut)
         {
-            var element = new XElement(name);
-            if (index.HasValue)
-                element.Add(new XAttribute("index", index.Value));
-            element.Add(
-                new XAttribute("relativeOffset", entry.RelativeOffset),
+            var element = new XElement(name,
+                new XAttribute("offset", entry.RelativeOffset),
                 new XAttribute("tbp", entry.Tbp),
-                new XAttribute("psm", entry.Psm),
-                new XAttribute("unknown", entry.Unknown),
                 new XAttribute("tbw", entry.Tbw),
-                new XAttribute("sharedVram", entry.SharedVram),
-                new XAttribute("offsetX", entry.OffsetX),
-                new XAttribute("offsetY", entry.OffsetY),
-                new XAttribute("width", entry.Width),
-                new XAttribute("height", entry.Height));
+                new XAttribute("vram", entry.SharedVram),
+                new XAttribute("x", entry.OffsetX),
+                new XAttribute("y", entry.OffsetY));
+
+            if (!isClut)
+            {
+                element.Add(
+                    new XAttribute("psm", entry.Psm),
+                    new XAttribute("w", entry.Width),
+                    new XAttribute("h", entry.Height));
+            }
             return element;
         }
 
-        static TexEntryMetadata ReadEntry(XElement element) => new()
+        static TexEntryMetadata ReadEntry(XElement element, bool isClut) => new()
         {
-            RelativeOffset = ReadUInt32(element, "relativeOffset"),
+            RelativeOffset = ReadUInt32(element, "offset"),
             Tbp = ReadUInt16(element, "tbp"),
-            Psm = ReadByte(element, "psm"),
-            Unknown = ReadByte(element, "unknown"),
+            Psm = isClut ? (byte)0 : ReadByte(element, "psm"),
             Tbw = ReadUInt16(element, "tbw"),
-            SharedVram = ReadUInt16(element, "sharedVram"),
-            OffsetX = ReadUInt16(element, "offsetX"),
-            OffsetY = ReadUInt16(element, "offsetY"),
-            Width = ReadUInt16(element, "width"),
-            Height = ReadUInt16(element, "height")
+            SharedVram = ReadUInt16(element, "vram"),
+            OffsetX = ReadUInt16(element, "x"),
+            OffsetY = ReadUInt16(element, "y"),
+            Width = isClut ? (ushort)0 : ReadUInt16(element, "w"),
+            Height = isClut ? (ushort)0 : ReadUInt16(element, "h")
         };
 
-        static string ReadString(XElement element, string name) =>
+        static string ReadRequired(XElement element, string name) =>
             element.Attribute(name)?.Value ?? throw new InvalidDataException($"Missing attribute '{name}'.");
 
-        static int ReadInt(XElement element, string name) =>
-            int.Parse(ReadString(element, name), NumberStyles.None, CultureInfo.InvariantCulture);
-
         static uint ReadUInt32(XElement element, string name) =>
-            uint.Parse(ReadString(element, name), NumberStyles.None, CultureInfo.InvariantCulture);
+            uint.Parse(ReadRequired(element, name), NumberStyles.None, CultureInfo.InvariantCulture);
 
         static ushort ReadUInt16(XElement element, string name) =>
-            ushort.Parse(ReadString(element, name), NumberStyles.None, CultureInfo.InvariantCulture);
+            ushort.Parse(ReadRequired(element, name), NumberStyles.None, CultureInfo.InvariantCulture);
 
         static byte ReadByte(XElement element, string name) =>
-            byte.Parse(ReadString(element, name), NumberStyles.None, CultureInfo.InvariantCulture);
+            byte.Parse(ReadRequired(element, name), NumberStyles.None, CultureInfo.InvariantCulture);
 
         static byte[] ReadHex(XElement element, string name, int expectedLength)
         {
-            byte[] value = Convert.FromHexString(ReadString(element, name));
+            byte[] value = Convert.FromHexString(ReadRequired(element, name));
             if (value.Length != expectedLength)
                 throw new InvalidDataException($"Attribute '{name}' must contain {expectedLength} bytes.");
             return value;
@@ -261,8 +218,8 @@ namespace GalaxyAngel2Localization.Utils
                     throw new InvalidDataException("Invalid TEX signature or truncated header.");
 
                 ushort count = ReadUInt16(data, 0x24);
-                ushort hasClut = ReadUInt16(data, 0x26);
-                int entryCount = checked(count + (hasClut == 0 ? 0 : 1));
+                bool hasClut = ReadUInt16(data, 0x26) != 0;
+                int entryCount = checked(count + (hasClut ? 1 : 0));
                 if (count == 0 || 0x28L + entryCount * 20L > data.Length)
                     throw new InvalidDataException("Invalid TEX entry table.");
 
@@ -273,17 +230,14 @@ namespace GalaxyAngel2Localization.Utils
                 metadata = new TexFileMetadata
                 {
                     Path = path.Replace('\\', '/').TrimStart('/'),
-                    FileLength = data.Length,
                     Cw = ReadUInt16(data, 0x04),
                     Ch = ReadUInt16(data, 0x06),
-                    Unknown1 = data.AsSpan(0x08, 12).ToArray(),
+                    Unknown = data.AsSpan(0x08, 12).ToArray(),
                     RealWidth = ReadUInt32(data, 0x14),
                     RealHeight = ReadUInt32(data, 0x18),
-                    Unknown2 = data.AsSpan(0x1C, 4).ToArray(),
                     BaseOffset = ReadUInt32(data, 0x20),
-                    HasClut = hasClut,
                     Sprites = sprites,
-                    Clut = hasClut == 0 ? null : ReadEntry(data, 0x28 + count * 20)
+                    Clut = hasClut ? ReadEntry(data, 0x28 + count * 20) : null
                 };
                 return true;
             }
@@ -299,7 +253,6 @@ namespace GalaxyAngel2Localization.Utils
             RelativeOffset = ReadUInt32(data, offset),
             Tbp = ReadUInt16(data, offset + 4),
             Psm = data[offset + 6],
-            Unknown = data[offset + 7],
             Tbw = ReadUInt16(data, offset + 8),
             SharedVram = ReadUInt16(data, offset + 10),
             OffsetX = ReadUInt16(data, offset + 12),
