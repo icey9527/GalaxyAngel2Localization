@@ -119,7 +119,7 @@
   </data><data name="MainForm_Designer_8" xml:space="preserve">
     <value>Pre-rebuild tasks</value>
   </data><data name="MainForm_Designer_9" xml:space="preserve">
-    <value>Select a project above, tick the types you want to extract, then click "Start extraction".\r\nAGI: Converts to .agi.png. Copy only modified PNGs to modified/ to prevent bloating the patch.</value>
+    <value>Select a project above, tick the types you want to extract, then click "Start extraction".\r\nAGI/TEX: Converts to .agi.png/.tex.png. TEX metadata is saved as tex.xml; keep it with modified TEX PNGs. Copy only modified PNGs to modified/ to prevent bloating the patch.</value>
   </data><data name="MainForm_Extract_1" xml:space="preserve">
     <value>[Progress] {done}/{total}</value>
   </data><data name="MainForm_Extract_10" xml:space="preserve">

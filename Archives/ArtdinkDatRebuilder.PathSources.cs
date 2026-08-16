@@ -84,6 +84,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             string modifiedRoot,
             Action<string>? logCallback)
         {
+            TexMetadataDocument? texMetadata = LoadTexMetadataIfNeeded(allPaths, modifiedRoot);
             var map = new ConcurrentDictionary<string, PathSource>(StringComparer.OrdinalIgnoreCase);
             var po = new ParallelOptions
             {
@@ -92,7 +93,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
 
             Parallel.ForEach(allPaths, po, rel =>
             {
-                var src = BuildSinglePathSource(rel, originalRoot, modifiedRoot, logCallback);
+                var src = BuildSinglePathSource(rel, originalRoot, modifiedRoot, texMetadata, logCallback);
                 map[rel] = src;
             });
 
@@ -103,6 +104,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             string rel,
             string originalRoot,
             string modifiedRoot,
+            TexMetadataDocument? texMetadata,
             Action<string>? logCallback)
         {
             string normRel = rel.Replace('\\', '/');
@@ -148,7 +150,29 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                 }
             }
 
-            if (ext.Equals(".agi", StringComparison.OrdinalIgnoreCase))
+            if (ext.Equals(".tex", StringComparison.OrdinalIgnoreCase))
+            {
+                string pngPath = modPath + ".png";
+                if (File.Exists(pngPath))
+                {
+                    if (texMetadata == null)
+                        throw new InvalidDataException($"{normRel}.png: modified/tex.xml is required for TEX encoding.");
+                    if (!texMetadata.TryGetFile(normRel, out var metadata))
+                        throw new InvalidDataException($"{normRel}.png: no matching entry in modified/tex.xml.");
+                    if (!TexEncoder.EncodePngToTexBytes(pngPath, metadata, out var texBytes, out var err))
+                        throw new InvalidDataException($"{normRel}.png: {err ?? "TEX encoding failed"}");
+
+                    logCallback?.Invoke($"[PNG->TEX] {normRel}.png -> {normRel}");
+                    SetModifiedBytes(src, texBytes);
+                }
+                else if (File.Exists(modPath))
+                {
+                    SetModifiedBytes(src, File.ReadAllBytes(modPath));
+                    if (src.OrigCompressed)
+                        logCallback?.Invoke(normRel);
+                }
+            }
+            else if (ext.Equals(".agi", StringComparison.OrdinalIgnoreCase))
             {
                 string pngPath = modPath + ".png";
                 if (File.Exists(pngPath))
@@ -219,6 +243,49 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             }
 
             return src;
+        }
+
+        static TexMetadataDocument? LoadTexMetadataIfNeeded(HashSet<string> allPaths, string modifiedRoot)
+        {
+            bool hasTexPng = false;
+            foreach (string rel in allPaths)
+            {
+                if (!Path.GetExtension(rel).Equals(".tex", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string pngPath = Path.Combine(
+                    modifiedRoot,
+                    NormalizePath(rel).Replace('/', Path.DirectorySeparatorChar)) + ".png";
+                if (File.Exists(pngPath))
+                {
+                    hasTexPng = true;
+                    break;
+                }
+            }
+
+            if (!hasTexPng)
+                return null;
+
+            string xmlPath = Path.Combine(modifiedRoot, "tex.xml");
+            if (!File.Exists(xmlPath))
+                throw new FileNotFoundException("TEX PNG files are present, but modified/tex.xml is missing.", xmlPath);
+            return TexMetadataDocument.Load(xmlPath);
+        }
+
+        static void SetModifiedBytes(PathSource source, byte[] plain)
+        {
+            source.HasModified = true;
+            source.PlainSize = plain.Length;
+            if (!source.HasOriginal || source.OrigCompressed)
+            {
+                byte[] compressed = ArtdinkCodec.Compress(plain, 1, true);
+                source.CompBuffer = compressed;
+                source.CompSize = compressed.Length;
+            }
+            else
+            {
+                source.CompBuffer = plain;
+                source.CompSize = plain.Length;
+            }
         }
 
         static PathDataInfo WriteDataFromSource(FileStream fsOut, PathSource src)

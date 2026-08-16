@@ -18,7 +18,7 @@ namespace GalaxyAngel2Localization.UI
     {
         static readonly string[] DefaultExtractExtensions =
         {
-            "tbl", "txt", "scn", "isb", "asb", "dat", "agi"
+            "tbl", "txt", "scn", "isb", "asb", "dat", "agi", "tex"
         };
 
         void InitExtractExtensions()
@@ -294,6 +294,7 @@ namespace GalaxyAngel2Localization.UI
             int okCount = 0;
             int failCount = 0;
             var logLines = new ConcurrentQueue<string>();
+            var texMetadata = new ConcurrentDictionary<string, TexFileMetadata>(StringComparer.OrdinalIgnoreCase);
 
             var po = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
             int total = pathsToExtract.Count;
@@ -365,6 +366,35 @@ namespace GalaxyAngel2Localization.UI
                             msgOk = $"[AGI保持原样] {relPath}";
                         }
                     }
+                    else if (ext.Equals(".tex", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string outRelPath = relPath + ".png";
+                        var destPathPng = Path.Combine(
+                            extractRoot,
+                            outRelPath.Replace('/', Path.DirectorySeparatorChar));
+
+                        if (TexDecoder.DecodeTexToPng(
+                            content,
+                            destPathPng,
+                            relPath,
+                            out var metadata,
+                            out var decodeError) && metadata != null)
+                        {
+                            texMetadata[relPath.Replace('\\', '/')] = metadata;
+                            msgOk = $"[TEX->PNG] {relPath} -> {relPath}.png";
+                        }
+                        else
+                        {
+                            var destPathTex = Path.Combine(
+                                extractRoot,
+                                relPath.Replace('/', Path.DirectorySeparatorChar));
+                            var dirTex = Path.GetDirectoryName(destPathTex);
+                            if (!string.IsNullOrEmpty(dirTex))
+                                Directory.CreateDirectory(dirTex);
+                            File.WriteAllBytes(destPathTex, content);
+                            msgOk = $"[TEX as-is] {relPath}: {decodeError ?? "decode failed"}";
+                        }
+                    }
                     else
                     {
                         string outRelPath = relPath;
@@ -403,6 +433,15 @@ namespace GalaxyAngel2Localization.UI
                     }
                 }
             });
+
+            if (texMetadata.Count > 0)
+            {
+                string texXmlPath = Path.Combine(extractRoot, "tex.xml");
+                TexMetadataDocument.Save(texXmlPath, texMetadata.Values);
+                var msg = $"[TEX metadata] {texXmlPath} ({texMetadata.Count} entries)";
+                logLines.Enqueue(msg);
+                logCallback?.Invoke(msg);
+            }
 
             var logText = string.Join(Environment.NewLine, logLines);
 

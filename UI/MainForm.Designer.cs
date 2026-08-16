@@ -287,7 +287,7 @@ namespace GalaxyAngel2Localization.UI
             this.lblExtractHint.Name = "lblExtractHint";
             this.lblExtractHint.Size = new System.Drawing.Size(623, 30);
             this.lblExtractHint.TabIndex = 0;
-            this.lblExtractHint.Text = "在上方选择项目，勾选要提取的类型，然后点击“开始提取”。\r\nAGI：工具会把 .agi 转成 .agi.png。请只把你修改过的 PNG 复制到 modified/，避免未修改图片参与差分补丁导致补丁过大。";
+            this.lblExtractHint.Text = "在上方选择项目，勾选要提取的类型，然后点击“开始提取”。\r\nAGI/TEX：工具会转换成 .agi.png/.tex.png，并为 TEX 生成 tex.xml；请将 tex.xml 与修改过的 TEX PNG 一起放入 modified/。";
             // 
             // tabPrePack
             // 

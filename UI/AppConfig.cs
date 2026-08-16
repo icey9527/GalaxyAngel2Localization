@@ -140,7 +140,7 @@ namespace GalaxyAngel2Localization.UI
         {
             cfg.ExtractExtensions.AddRange(new[]
             {
-                "tbl", "txt", "scn", "isb", "asb", "dat", "agi"
+                "tbl", "txt", "scn", "isb", "asb", "dat", "agi", "tex"
             });
         }
     }
