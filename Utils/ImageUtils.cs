@@ -319,6 +319,71 @@ namespace Utils
         }
 
         /// <summary>
+        /// FixAlphaPs2 的逆映射: 0 保持 0，其余 (a+1)/2 落回 PS2 的 0..128 区间。
+        /// </summary>
+        public static byte EncodePs2Alpha(byte a) => a == 0 ? (byte)0 : (byte)((a + 1) / 2);
+
+        /// <summary>
+        /// 通用: 从像素流构建索引色编码用的调色板与索引。
+        /// 调色板按亮度降序排列（亮色在前，字节过渡平滑，利于 LZ/ARZ 压缩），
+        /// 同亮度按首次出现顺序。颜色数超过 maxColors 时返回 false（调用方自行量化）。
+        /// </summary>
+        public static bool TryBuildBrightnessSortedPalette(
+            (byte R, byte G, byte B, byte A)[] pixels,
+            int maxColors,
+            out byte[] indices,
+            out List<(byte R, byte G, byte B, byte A)> palette)
+        {
+            if (pixels == null) throw new ArgumentNullException(nameof(pixels));
+            indices = new byte[pixels.Length];
+            palette = new List<(byte, byte, byte, byte)>(maxColors);
+
+            var distinct = new Dictionary<uint, int>(maxColors);   // key -> 首次出现序号
+            var colors = new List<(byte R, byte G, byte B, byte A)>(maxColors);
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                var c = pixels[i];
+                uint key = ((uint)c.A << 24) | ((uint)c.R << 16) | ((uint)c.G << 8) | c.B;
+                if (!distinct.ContainsKey(key))
+                {
+                    if (colors.Count == maxColors)
+                        return false;
+                    distinct.Add(key, colors.Count);
+                    colors.Add(c);
+                }
+            }
+
+            int[] order = new int[colors.Count];
+            for (int i = 0; i < order.Length; i++) order[i] = i;
+            Array.Sort(order, Comparer<int>.Create((a, b) =>
+            {
+                var ca = colors[a];
+                var cb = colors[b];
+                int la = ca.R * 299 + ca.G * 587 + ca.B * 114;
+                int lb = cb.R * 299 + cb.G * 587 + cb.B * 114;
+                if (la != lb) return lb.CompareTo(la);      // 亮色在前
+                return a.CompareTo(b);                       // 同亮度按首次出现
+            }));
+
+            var slotOfOrder = new byte[colors.Count];
+            for (int slot = 0; slot < order.Length; slot++)
+            {
+                slotOfOrder[order[slot]] = (byte)slot;
+                palette.Add(colors[order[slot]]);
+            }
+            while (palette.Count < maxColors)
+                palette.Add(default);
+
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                var c = pixels[i];
+                uint key = ((uint)c.A << 24) | ((uint)c.R << 16) | ((uint)c.G << 8) | c.B;
+                indices[i] = slotOfOrder[distinct[key]];
+            }
+            return true;
+        }
+
+        /// <summary>
         /// 从 RGBA 调色板数据构建 BGRA 调色板。
         /// 不做重排，只做 RGBA-&gt;BGRA + 可选 PS2 Alpha 映射。
         /// </summary>

@@ -18,7 +18,7 @@ namespace GalaxyAngel2Localization.UI
     {
         static readonly string[] DefaultExtractExtensions =
         {
-            "tbl", "txt", "scn", "isb", "asb", "dat", "agi", "tex"
+            "tbl", "txt", "scn", "isb", "asb", "dat", "agi", "tex", "tag"
         };
 
         void InitExtractExtensions()
@@ -299,6 +299,8 @@ namespace GalaxyAngel2Localization.UI
             var po = new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount };
             int total = pathsToExtract.Count;
             int processed = 0;
+            var tagMetadata = new ConcurrentDictionary<string, TagFileMetadata>(StringComparer.OrdinalIgnoreCase);
+            var agiMetadata = new ConcurrentDictionary<string, AgiFileMetadata>(StringComparer.OrdinalIgnoreCase);
 
             Parallel.ForEach(pathsToExtract, po, relPath =>
             {
@@ -349,6 +351,21 @@ namespace GalaxyAngel2Localization.UI
 
                         if (AgiDecoder.DecodeAgiToPng(content, destPathPng))
                         {
+                            string normRel = relPath.Replace('\\', '/');
+                            agiMetadata[normRel] = new AgiFileMetadata
+                            {
+                                Path = normRel,
+                                BitsPerPixel = (content[0x0E] & 7) switch
+                                {
+                                    4 => 4,
+                                    3 => 8,
+                                    _ => 0
+                                },
+                                TextureBase = (ushort)(content[0x0C] | (content[0x0D] << 8)),
+                                Reg3 = BitConverter.ToUInt32(content, 0x14),
+                                ClutBase = BitConverter.ToUInt32(content, 0x20),
+                                ClutReg3 = BitConverter.ToUInt32(content, 0x28)
+                            };
                             msgOk = $"[AGI->PNG] {relPath} -> {relPath}.png";
                         }
                         else
@@ -395,6 +412,37 @@ namespace GalaxyAngel2Localization.UI
                             msgOk = $"[TEX as-is] {relPath}: {decodeError ?? "decode failed"}";
                         }
                     }
+                    else if (ext.Equals(".tag", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (TagDecoder.DecodeTagToPngs(
+                                content,
+                                extractRoot,
+                                relPath,
+                                out int tagImageCount,
+                                out var tagImages,
+                                out var tagError) && tagImageCount > 0)
+                        {
+                            tagMetadata[relPath.Replace('\\', '/')] = new TagFileMetadata
+                            {
+                                Path = relPath.Replace('\\', '/'),
+                                Images = tagImages
+                            };
+                            msgOk = $"[TAG->PNG] {relPath} -> {tagImageCount} image(s)";
+                        }
+                        else
+                        {
+                            var destPathTag = Path.Combine(
+                                extractRoot,
+                                relPath.Replace('/', Path.DirectorySeparatorChar));
+
+                            var dirTag = Path.GetDirectoryName(destPathTag);
+                            if (!string.IsNullOrEmpty(dirTag))
+                                Directory.CreateDirectory(dirTag);
+
+                            File.WriteAllBytes(destPathTag, content);
+                            msgOk = $"[TAG as-is] {relPath}: {tagError ?? "decode failed"}";
+                        }
+                    }
                     else
                     {
                         string outRelPath = relPath;
@@ -439,6 +487,24 @@ namespace GalaxyAngel2Localization.UI
                 string texXmlPath = Path.Combine(extractRoot, "tex.xml");
                 TexMetadataDocument.Save(texXmlPath, texMetadata.Values);
                 var msg = $"[TEX metadata] {texXmlPath} ({texMetadata.Count} entries)";
+                logLines.Enqueue(msg);
+                logCallback?.Invoke(msg);
+            }
+
+            if (tagMetadata.Count > 0)
+            {
+                string tagXmlPath = Path.Combine(extractRoot, "tag.xml");
+                TagMetadataDocument.Save(tagXmlPath, tagMetadata.Values);
+                var msg = $"[TAG metadata] {tagXmlPath} ({tagMetadata.Count} entries)";
+                logLines.Enqueue(msg);
+                logCallback?.Invoke(msg);
+            }
+
+            if (agiMetadata.Count > 0)
+            {
+                string agiXmlPath = Path.Combine(extractRoot, "agi.xml");
+                AgiMetadataDocument.Save(agiXmlPath, agiMetadata.Values);
+                var msg = $"[AGI metadata] {agiXmlPath} ({agiMetadata.Count} entries)";
                 logLines.Enqueue(msg);
                 logCallback?.Invoke(msg);
             }

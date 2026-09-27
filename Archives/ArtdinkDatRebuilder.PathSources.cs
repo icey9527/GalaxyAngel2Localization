@@ -85,6 +85,8 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             Action<string>? logCallback)
         {
             TexMetadataDocument? texMetadata = LoadTexMetadataIfNeeded(allPaths, modifiedRoot);
+            TagMetadataDocument? tagMetadata = LoadTagMetadataIfNeeded(allPaths, modifiedRoot);
+            AgiMetadataDocument? agiMetadata = LoadAgiMetadataIfNeeded(allPaths, modifiedRoot);
             var map = new ConcurrentDictionary<string, PathSource>(StringComparer.OrdinalIgnoreCase);
             var po = new ParallelOptions
             {
@@ -93,7 +95,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
 
             Parallel.ForEach(allPaths, po, rel =>
             {
-                var src = BuildSinglePathSource(rel, originalRoot, modifiedRoot, texMetadata, logCallback);
+                var src = BuildSinglePathSource(rel, originalRoot, modifiedRoot, texMetadata, tagMetadata, agiMetadata, logCallback);
                 map[rel] = src;
             });
 
@@ -105,6 +107,8 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             string originalRoot,
             string modifiedRoot,
             TexMetadataDocument? texMetadata,
+            TagMetadataDocument? tagMetadata,
+            AgiMetadataDocument? agiMetadata,
             Action<string>? logCallback)
         {
             string normRel = rel.Replace('\\', '/');
@@ -177,45 +181,56 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                 string pngPath = modPath + ".png";
                 if (File.Exists(pngPath))
                 {
-                    if (!AgiEncoder.EncodePngToAgiBytes(pngPath, out var agiBytes, out var err))
+                    // agi.xml 只是 bpp 选择表: 有条目用条目的 bpp(+VRAM 簿记)，没有条目一律 8bpp
+                    AgiFileMetadata? meta = null;
+                    if (agiMetadata != null)
+                        agiMetadata.TryGetFile(normRel, out meta);
+
+                    if (!AgiEncoder.EncodePngToAgiBytes(pngPath, meta, out var agiBytes, out var err))
                         throw new InvalidOperationException($"{normRel}.png: {err ?? "AGI 编码失败"}");
 
-                    logCallback?.Invoke($"[PNG->AGI] {normRel}.png -> {normRel}");
-
-                    src.HasModified = true;
-                    src.PlainSize = agiBytes.Length;
-
-                    if (!src.HasOriginal || src.OrigCompressed)
-                    {
-                        var comp = ArtdinkCodec.Compress(agiBytes, 1, true);
-                        src.CompBuffer = comp;
-                        src.CompSize = comp.Length;
-                    }
-                    else
-                    {
-                        src.CompBuffer = agiBytes;
-                        src.CompSize = agiBytes.Length;
-                    }
+                    int bpp = meta?.BitsPerPixel ?? 8;
+                    logCallback?.Invoke($"[PNG->AGI] {normRel}.png -> {normRel}" + (bpp == 0 ? " (auto)" : $" ({bpp}bpp)"));
+                    SetModifiedBytes(src, agiBytes);
                 }
                 else if (File.Exists(modPath))
                 {
-                    var plain = File.ReadAllBytes(modPath);
-                    src.HasModified = true;
-                    src.PlainSize = plain.Length;
-
-                    if (!src.HasOriginal || src.OrigCompressed)
-                    {
-                        var comp = ArtdinkCodec.Compress(plain, 1, true);
-                        src.CompBuffer = comp;
-                        src.CompSize = comp.Length;
-
+                    SetModifiedBytes(src, File.ReadAllBytes(modPath));
+                    if (src.OrigCompressed)
                         logCallback?.Invoke($"{normRel}");
-                    }
-                    else
-                    {
-                        src.CompBuffer = plain;
-                        src.CompSize = plain.Length;
-                    }
+                }
+            }
+            else if (ext.Equals(".tag", StringComparison.OrdinalIgnoreCase))
+            {
+                bool handled = false;
+
+                bool hasTagPng = tagMetadata != null
+                    ? tagMetadata.TryGetFile(normRel, out var meta) && meta.Images.Any(i =>
+                          File.Exists(modPath + "." + i.Index + ".png"))
+                    : HasAnyTagImagePng(modPath);
+
+                if (hasTagPng)
+                {
+                    if (tagMetadata == null || !tagMetadata.TryGetFile(normRel, out var metadata))
+                        throw new InvalidDataException($"{normRel}.N.png: no matching entry in modified/tag.xml.");
+                    if (!src.HasOriginal)
+                        throw new InvalidDataException($"{normRel}.N.png: the original .tag file is required as the encode template.");
+
+                    byte[] originalTag = ReadOriginalPlain(origPath);
+
+                    if (!TagEncoder.EncodePngsToTagBytes(originalTag, metadata, modPath, out var tagBytes, out int replaced, out var err))
+                        throw new InvalidDataException($"{normRel}.N.png: {err ?? "TAG encoding failed"}");
+
+                    logCallback?.Invoke($"[PNG->TAG] {normRel} ({replaced} image(s))");
+                    SetModifiedBytes(src, tagBytes);
+                    handled = true;
+                }
+
+                if (!handled && File.Exists(modPath))
+                {
+                    SetModifiedBytes(src, File.ReadAllBytes(modPath));
+                    if (src.OrigCompressed)
+                        logCallback?.Invoke(normRel);
                 }
             }
             else
@@ -269,6 +284,97 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             if (!File.Exists(xmlPath))
                 throw new FileNotFoundException("TEX PNG files are present, but modified/tex.xml is missing.", xmlPath);
             return TexMetadataDocument.Load(xmlPath);
+        }
+
+        static TagMetadataDocument? LoadTagMetadataIfNeeded(HashSet<string> allPaths, string modifiedRoot)
+        {
+            bool hasTagPng = false;
+            foreach (string rel in allPaths)
+            {
+                if (!Path.GetExtension(rel).Equals(".tag", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string modPath = Path.Combine(
+                    modifiedRoot,
+                    NormalizePath(rel).Replace('/', Path.DirectorySeparatorChar));
+                if (HasAnyTagImagePng(modPath))
+                {
+                    hasTagPng = true;
+                    break;
+                }
+            }
+
+            if (!hasTagPng)
+                return null;
+
+            string xmlPath = Path.Combine(modifiedRoot, "tag.xml");
+            if (!File.Exists(xmlPath))
+                throw new FileNotFoundException("TAG PNG files are present, but modified/tag.xml is missing.", xmlPath);
+            return TagMetadataDocument.Load(xmlPath);
+        }
+
+        static AgiMetadataDocument? LoadAgiMetadataIfNeeded(HashSet<string> allPaths, string modifiedRoot)
+        {
+            bool hasAgiPng = false;
+            foreach (string rel in allPaths)
+            {
+                if (!Path.GetExtension(rel).Equals(".agi", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                string pngPath = Path.Combine(
+                    modifiedRoot,
+                    NormalizePath(rel).Replace('/', Path.DirectorySeparatorChar)) + ".png";
+                if (File.Exists(pngPath))
+                {
+                    hasAgiPng = true;
+                    break;
+                }
+            }
+
+            if (!hasAgiPng)
+                return null;
+
+            string xmlPath = Path.Combine(modifiedRoot, "agi.xml");
+            if (!File.Exists(xmlPath))
+                return null;
+            return AgiMetadataDocument.Load(xmlPath);
+        }
+
+        static byte[] ReadOriginalPlain(string origPath)
+        {
+            using var fs = new FileStream(origPath, new FileStreamOptions
+            {
+                Mode = FileMode.Open,
+                Access = FileAccess.Read,
+                Share = FileShare.Read,
+                Options = FileOptions.SequentialScan
+            });
+            if (ArtdinkCodec.Decompress(fs, (int)fs.Length, out var plain))
+                return plain;
+            fs.Position = 0;
+            using var ms = new MemoryStream();
+            fs.CopyTo(ms);
+            return ms.ToArray();
+        }
+
+        static bool HasAnyTagImagePng(string modPath)
+        {
+            string? dir = Path.GetDirectoryName(modPath);
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+                return false;
+
+            string prefix = Path.GetFileName(modPath) + ".";
+            foreach (string file in Directory.EnumerateFiles(dir, prefix + "*.png"))
+            {
+                string name = Path.GetFileName(file);
+                if (name.Length <= prefix.Length + 4 ||
+                    !name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) ||
+                    !name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                string digits = name.Substring(prefix.Length, name.Length - prefix.Length - 4);
+                if (digits.All(char.IsDigit))
+                    return true;
+            }
+            return false;
         }
 
         static void SetModifiedBytes(PathSource source, byte[] plain)
