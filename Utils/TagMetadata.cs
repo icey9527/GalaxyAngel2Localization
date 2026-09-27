@@ -97,7 +97,7 @@ namespace GalaxyAngel2Localization.Utils
             string path = NormalizePath(ReadRequired(element, "path"));
             try
             {
-                var images = element.Elements("image").Select(ReadImage).ToArray();
+                var images = element.Elements("image").Select((e, i) => ReadImage(e, i)).ToArray();
                 if (images.Length == 0)
                     throw new InvalidDataException("No image entries were found.");
 
@@ -117,8 +117,9 @@ namespace GalaxyAngel2Localization.Utils
             return element;
         }
 
-        static TagImageLayout ReadImage(XElement element) => new()
+        static TagImageLayout ReadImage(XElement element, int index) => new()
         {
+            Index = index,
             Width = ReadInt(element, "w"),
             Height = ReadInt(element, "h"),
             BitsPerPixel = ReadInt(element, "bpp")

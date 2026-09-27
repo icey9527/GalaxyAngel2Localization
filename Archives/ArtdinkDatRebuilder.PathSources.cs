@@ -87,6 +87,7 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             TexMetadataDocument? texMetadata = LoadTexMetadataIfNeeded(allPaths, modifiedRoot);
             TagMetadataDocument? tagMetadata = LoadTagMetadataIfNeeded(allPaths, modifiedRoot);
             AgiMetadataDocument? agiMetadata = LoadAgiMetadataIfNeeded(allPaths, modifiedRoot);
+
             var map = new ConcurrentDictionary<string, PathSource>(StringComparer.OrdinalIgnoreCase);
             var po = new ParallelOptions
             {
@@ -186,7 +187,8 @@ namespace GalaxyAngel2Localization.Archives.Artdink
                     if (agiMetadata != null)
                         agiMetadata.TryGetFile(normRel, out meta);
 
-                    if (!AgiEncoder.EncodePngToAgiBytes(pngPath, meta, out var agiBytes, out var err))
+                    byte[]? originalAgi = src.HasOriginal ? ReadOriginalPlain(origPath) : null;
+                    if (!AgiEncoder.EncodePngToAgiBytes(pngPath, meta, originalAgi, out var agiBytes, out var err))
                         throw new InvalidOperationException($"{normRel}.png: {err ?? "AGI 编码失败"}");
 
                     int bpp = meta?.BitsPerPixel ?? 8;

@@ -45,6 +45,13 @@ namespace GalaxyAngel2Localization.Utils
         public int BitsPerPixel;
         public int PixelOffset;
         public int PixelSize;
+
+        // 调色板上传槽 (BITBLTBUF 的 DBP/DBW + TRXPOS 的 DSA)。
+        // 多张图的调色板会先后写到同一个 VRAM 槽，运行时后写覆盖先写。
+        public int PaletteDbp;
+        public int PaletteDbw;
+        public int PaletteDsaX;
+        public int PaletteDsaY;
     }
 
     internal static class TagChain
@@ -90,7 +97,11 @@ namespace GalaxyAngel2Localization.Utils
                         Height = pixels.Height,
                         BitsPerPixel = bpp,
                         PixelOffset = pixels.Offset,
-                        PixelSize = pixels.Size
+                        PixelSize = pixels.Size,
+                        PaletteDbp = palette.Dbp,
+                        PaletteDbw = palette.Dbw,
+                        PaletteDsaX = palette.DsaX,
+                        PaletteDsaY = palette.DsaY
                     });
                 }
                 return true;
@@ -108,6 +119,10 @@ namespace GalaxyAngel2Localization.Utils
             public int Size;
             public int Width;
             public int Height;
+            public int Dbp;
+            public int Dbw;
+            public int DsaX;
+            public int DsaY;
         }
 
         /// <summary>
@@ -122,6 +137,7 @@ namespace GalaxyAngel2Localization.Utils
             var events = new List<TransferEvent>();
             var seen = new HashSet<int>();
             int pendingWidth = 0, pendingHeight = 0;
+            int pendingDbp = 0, pendingDbw = 0, pendingDsaX = 0, pendingDsaY = 0;
 
             void Walk(int cursor)
             {
@@ -138,7 +154,9 @@ namespace GalaxyAngel2Localization.Utils
                     {
                         case 0x10000000: // CNT: 数据区为寄存器记录包
                             if (qwc > 0)
-                                ReadPacketRecords(data, cursor + CommandSize, ref pendingWidth, ref pendingHeight);
+                                ReadPacketRecords(data, cursor + CommandSize,
+                                    ref pendingWidth, ref pendingHeight,
+                                    ref pendingDbp, ref pendingDbw, ref pendingDsaX, ref pendingDsaY);
                             cursor += CommandSize + qwc * CommandSize;
                             break;
                         case 0x20000000: // NEXT
@@ -151,10 +169,18 @@ namespace GalaxyAngel2Localization.Utils
                                 Offset = checked((int)address),
                                 Size = checked(qwc * CommandSize),
                                 Width = pendingWidth,
-                                Height = pendingHeight
+                                Height = pendingHeight,
+                                Dbp = pendingDbp,
+                                Dbw = pendingDbw,
+                                DsaX = pendingDsaX,
+                                DsaY = pendingDsaY
                             });
                             pendingWidth = 0;
                             pendingHeight = 0;
+                            pendingDbp = 0;
+                            pendingDbw = 0;
+                            pendingDsaX = 0;
+                            pendingDsaY = 0;
                             cursor += CommandSize;
                             break;
                         case 0x50000000: // CALL: 先处理子链，再继续本层
@@ -174,7 +200,9 @@ namespace GalaxyAngel2Localization.Utils
             return events;
         }
 
-        static void ReadPacketRecords(byte[] data, int packetOffset, ref int width, ref int height)
+        static void ReadPacketRecords(byte[] data, int packetOffset,
+            ref int width, ref int height,
+            ref int dbp, ref int dbw, ref int dsaX, ref int dsaY)
         {
             int recordCount = (int)(BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(packetOffset)) & 0xFFFF);
             for (int i = 0; i < recordCount; i++)
@@ -187,6 +215,22 @@ namespace GalaxyAngel2Localization.Utils
                 {
                     width = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(record + 4)));
                     height = checked((int)BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(record + 8)));
+                }
+                else if (reg == 0x50 || reg == 0x51) // BITBLTBUF / TRXPOS: 值 = lo | hi<<32
+                {
+                    ulong lo = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(record + 4));
+                    ulong hi = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(record + 8));
+                    ulong value = lo | (hi << 32);
+                    if (reg == 0x50)
+                    {
+                        dbp = (int)((value >> 32) & 0x3FFF);
+                        dbw = (int)((value >> 48) & 0x3F);
+                    }
+                    else
+                    {
+                        dsaX = (int)((value >> 32) & 0x7FF);
+                        dsaY = (int)((value >> 48) & 0x7FF);
+                    }
                 }
             }
         }
@@ -310,7 +354,11 @@ namespace GalaxyAngel2Localization.Utils
         /// <summary>
         /// 以 originalTag 为模板，把 pngBasePath + "." + index + ".png" 对应的图像
         /// 载荷就地替换进输出。metadata（tag.xml 条目）会与模板解析结果交叉校验。
-        /// 没有 PNG 的图像保持原字节。没有任何 PNG 时返回 true 且 replacedCount = 0。
+        /// 没有 PNG 的图像保持原字节。
+        ///
+        /// 调色板策略（定稿）：调色板一个字节都不动，像素颜色映射到原调色板
+        /// 最近的色号（精确匹配优先、保持原索引；alpha=0 统一落到透明色号）。
+        /// 未改的图逐字节不变；没有任何 PNG 时返回 true 且 replacedCount = 0。
         /// </summary>
         public static bool EncodePngsToTagBytes(
             byte[] originalTag,
@@ -342,24 +390,23 @@ namespace GalaxyAngel2Localization.Utils
             var output = (byte[])originalTag.Clone();
             int replaced = 0;
 
+            string PngPath(int index) => pngBasePath + "." + index + ".png";
+
             try
             {
+                // 策略: 调色板一个字节都不动, 只把有 PNG 的图的像素映射到原调色板最近的色号
+                // (不新增颜色; alpha=0 统一落到透明色号)。未改图逐字节不变。
                 foreach (var image in images)
                 {
-                    string pngPath = pngBasePath + "." + image.Index + ".png";
-                    if (!File.Exists(pngPath))
-                        continue;
+                    string pngPath = PngPath(image.Index);
+                    if (!File.Exists(pngPath)) continue;
 
-                    using var loaded = SixLabors.ImageSharp.Image.Load<Rgba32>(pngPath);
-                    if (loaded.Width != image.Width || loaded.Height != image.Height)
-                        throw new InvalidDataException(
-                            $"Image {image.Index}: PNG dimensions {loaded.Width}x{loaded.Height} do not match {image.Width}x{image.Height}.");
-
-                    var sourcePixels = new Rgba32[checked(image.Width * image.Height)];
-                    loaded.CopyPixelDataTo(sourcePixels);
-
-                    var indices = BuildIndices(sourcePixels, image, out var palette);
-                    WritePalette(output, image, palette);
+                    var pixels = LoadPng(pngPath, image);
+                    if (!MapIntoOriginalPalette(output, image, pixels, out var indices, out var mapError))
+                    {
+                        error = mapError;
+                        return false;
+                    }
                     WritePixels(output, image, indices);
                     replaced++;
                 }
@@ -376,34 +423,106 @@ namespace GalaxyAngel2Localization.Utils
         }
 
         /// <summary>
-        /// 通用策略（IndexedQuantizer）: 精确调色板优先，超出槽位数才 Wu 量化。
+        /// 把像素映射到原调色板(文件序字节不动): 精确匹配优先(保持原索引),
+        /// 其余取最近的色号(同透明度优先, alpha=0 落到透明色号)。
         /// </summary>
-        static byte[] BuildIndices(
-            Rgba32[] sourcePixels,
-            TagImageLayout image,
-            out List<(byte R, byte G, byte B, byte A)> palette) =>
-            IndexedQuantizer.Build(sourcePixels, image.Width, image.Height, image.ColorCount, out palette);
-
-        static void WritePalette(byte[] output, TagImageLayout image, List<(byte R, byte G, byte B, byte A)> palette)
+        static bool MapIntoOriginalPalette(byte[] data, TagImageLayout image, Rgba32[] pixels,
+            out byte[] indices, out string? error)
         {
-            int length = image.ColorCount * 4;
-            if (image.PaletteOffset + length > output.Length)
-                throw new InvalidDataException($"Image {image.Index}: palette block outside the TAG file.");
+            indices = Array.Empty<byte>();
+            error = null;
 
-            for (int i = 0; i < image.ColorCount; i++)
+            int colorCount = image.ColorCount;
+            if (colorCount != 16 && colorCount != 256)
             {
-                // 256 色按 GS CLUT 存储交错写入（与 TexEncoder.WritePalette 一致），16 色直接顺序
-                int storedIndex = image.ColorCount == 256
-                    ? (i & 0xE7) | ((i & 0x08) << 1) | ((i & 0x10) >> 1)
-                    : i;
-                var color = palette[i];
-                int p = image.PaletteOffset + storedIndex * 4;
-                output[p] = color.R;
-                output[p + 1] = color.G;
-                output[p + 2] = color.B;
-                output[p + 3] = ImageUtils.EncodePs2Alpha(color.A);
+                error = $"Image {image.Index}: 不支持的色数 {colorCount}";
+                return false;
             }
+            if (image.PaletteSize != colorCount * 4 ||
+                image.PaletteOffset < 0 || image.PaletteOffset + image.PaletteSize > data.Length)
+            {
+                error = $"Image {image.Index}: 调色板块越界";
+                return false;
+            }
+
+            var palette = new (byte R, byte G, byte B, byte A)[colorCount];
+            var exact = new Dictionary<uint, int>(colorCount);
+            for (int i = 0; i < colorCount; i++)
+            {
+                int p = image.PaletteOffset + ImageUtils.Ps2ClutFileSlot(i, colorCount) * 4;
+                palette[i] = (data[p], data[p + 1], data[p + 2], ImageUtils.FixAlphaPs2(data[p + 3]));
+                uint key = ((uint)palette[i].A << 24) | ((uint)palette[i].R << 16) | ((uint)palette[i].G << 8) | palette[i].B;
+                exact.TryAdd(key, i);
+            }
+
+            indices = new byte[pixels.Length];
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                var c = pixels[i];
+                uint key = ((uint)c.A << 24) | ((uint)c.R << 16) | ((uint)c.G << 8) | c.B;
+                indices[i] = exact.TryGetValue(key, out int slot)
+                    ? (byte)slot
+                    : (byte)ImageUtils.NearestPaletteSlot(palette, colorCount, (c.R, c.G, c.B, c.A));
+            }
+            return true;
         }
+
+        static Rgba32[] LoadPng(string pngPath, TagImageLayout img)
+        {
+            using var loaded = SixLabors.ImageSharp.Image.Load<Rgba32>(pngPath);
+            if (loaded.Width != img.Width || loaded.Height != img.Height)
+                throw new InvalidDataException(
+                    $"Image {img.Index}: PNG dimensions {loaded.Width}x{loaded.Height} do not match {img.Width}x{img.Height}.");
+            var pixels = new Rgba32[img.Width * img.Height];
+            loaded.CopyPixelDataTo(pixels);
+            return pixels;
+        }
+
+        static Rgba32 Transparent => new(0, 0, 0, 0);
+
+        /// <summary>从原文件把一张图的像素解码成 RGBA（alpha 用 PS2 约定修正）。</summary>
+        internal static Rgba32[] DecodePixels(byte[] data, TagImageLayout img)
+        {
+            int colorCount = img.ColorCount;
+            var palette = new (byte R, byte G, byte B, byte A)[colorCount];
+            for (int i = 0; i < colorCount; i++)
+            {
+                int p = img.PaletteOffset + ImageUtils.Ps2ClutFileSlot(i, colorCount) * 4;
+                palette[i] = (data[p], data[p + 1], data[p + 2], ImageUtils.FixAlphaPs2(data[p + 3]));
+            }
+
+            var pixels = new Rgba32[img.Width * img.Height];
+            for (int k = 0; k < pixels.Length; k++)
+                pixels[k] = Transparent;   // 超出数据的部分保持透明
+
+            int needed = img.Width * img.Height * img.BitsPerPixel / 8;
+            int valid = Math.Min(img.PixelSize, needed);
+            if (valid <= 0 || img.PixelOffset < 0 || img.PixelOffset + valid > data.Length)
+                return pixels;
+
+            var span = data.AsSpan(img.PixelOffset, valid);
+            if (img.BitsPerPixel == 8)
+            {
+                for (int k = 0; k < pixels.Length && k < valid; k++)
+                {
+                    var c = palette[span[k]];
+                    pixels[k] = new Rgba32(c.R, c.G, c.B, c.A);
+                }
+            }
+            else
+            {
+                for (int k = 0; k < pixels.Length; k++)
+                {
+                    int half = k >> 1;
+                    if (half >= valid) break;
+                    int slot = (k & 1) == 0 ? (span[half] & 0x0F) : (span[half] >> 4);
+                    var c = palette[slot];
+                    pixels[k] = new Rgba32(c.R, c.G, c.B, c.A);
+                }
+            }
+            return pixels;
+        }
+
 
         static void WritePixels(byte[] output, TagImageLayout image, byte[] indices)
         {

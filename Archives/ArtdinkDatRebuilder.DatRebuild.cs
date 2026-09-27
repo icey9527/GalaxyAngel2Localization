@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -535,37 +535,5 @@ namespace GalaxyAngel2Localization.Archives.Artdink
             }
         }
 
-        static void AddDirRecursive(DirNode dir, List<Table2Build> table2)
-        {
-            int myIndex = table2.Count;
-            var entry = new Table2Build
-            {
-                Name = dir.Name,
-                IsDirectory = true
-            };
-            table2.Add(entry);
-
-            int childStart = table2.Count;
-
-            foreach (var childDir in dir.Dirs.Values.OrderBy(d => d.Name, StringComparer.OrdinalIgnoreCase))
-                AddDirRecursive(childDir, table2);
-
-            foreach (var file in dir.Files.Values.OrderBy(f => f.Name, StringComparer.OrdinalIgnoreCase))
-            {
-                table2.Add(new Table2Build
-                {
-                    Name = file.Name,
-                    IsDirectory = false,
-                    FullPath = file.FullPath
-                });
-            }
-
-            int childCount = table2.Count - childStart;
-
-            var me = table2[myIndex];
-            me.ChildStart = childStart;
-            me.ChildCount = childCount;
-            table2[myIndex] = me;
-        }
     }
 }

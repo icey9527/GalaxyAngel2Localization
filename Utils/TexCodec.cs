@@ -214,13 +214,14 @@ namespace GalaxyAngel2Localization.Utils
                 var sourcePixels = new Rgba32[checked(image.Width * image.Height)];
                 image.CopyPixelDataTo(sourcePixels);
 
-                texData = new byte[CalculateFileLength(metadata)];
-                WriteHeader(texData, metadata, image.Width, image.Height);
+                TexLayout layout = PlanLayout(metadata);
+                texData = new byte[layout.FileLength];
+                WriteHeader(texData, metadata, image.Width, image.Height, layout);
 
                 IndexedPixels? indexed = BuildIndexedPixels(sourcePixels, image.Width, image.Height, metadata);
-                WriteSprites(texData, sourcePixels, image.Width, image.Height, metadata, indexed);
+                WriteSprites(texData, sourcePixels, image.Width, image.Height, metadata, indexed, layout);
                 if (indexed != null)
-                    WritePalette(texData, metadata, indexed);
+                    WritePalette(texData, metadata, indexed, layout);
                 return true;
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or OverflowException or ArgumentException)
@@ -332,7 +333,7 @@ namespace GalaxyAngel2Localization.Utils
             return true;
         }
 
-        static void WriteHeader(byte[] output, TexFileMetadata metadata, int imageWidth, int imageHeight)
+        static void WriteHeader(byte[] output, TexFileMetadata metadata, int imageWidth, int imageHeight, TexLayout layout)
         {
             output[0] = (byte)'T';
             output[1] = (byte)'E';
@@ -348,9 +349,9 @@ namespace GalaxyAngel2Localization.Utils
             WriteUInt16(output, 0x26, metadata.Clut == null ? (ushort)0 : (ushort)1);
 
             for (int i = 0; i < metadata.Sprites.Count; i++)
-                WriteEntry(output, 0x28 + i * 20, metadata.Sprites[i]);
+                WriteEntry(output, 0x28 + i * 20, metadata.Sprites[i], ToRelative(metadata.BaseOffset, layout.SpriteOffsets[i]));
             if (metadata.Clut != null)
-                WriteClutEntry(output, 0x28 + metadata.Sprites.Count * 20, metadata.Clut, GetPaletteColorCount(metadata));
+                WriteClutEntry(output, 0x28 + metadata.Sprites.Count * 20, metadata.Clut, GetPaletteColorCount(metadata), ToRelative(metadata.BaseOffset, layout.ClutOffset));
         }
 
         static void WriteSprites(
@@ -359,12 +360,14 @@ namespace GalaxyAngel2Localization.Utils
             int sourceWidth,
             int sourceHeight,
             TexFileMetadata metadata,
-            IndexedPixels? indexed)
+            IndexedPixels? indexed,
+            TexLayout layout)
         {
             int spriteY = 0;
-            foreach (var sprite in metadata.Sprites)
+            for (int i = 0; i < metadata.Sprites.Count; i++)
             {
-                int destination = TexDecoder.GetAbsoluteOffset(metadata.BaseOffset, sprite.RelativeOffset);
+                var sprite = metadata.Sprites[i];
+                int destination = layout.SpriteOffsets[i];
                 int rowSize = TexDecoder.GetRowSize(sprite.Psm, sprite.Width);
                 TexDecoder.EnsureRange(output.Length, destination, checked(rowSize * sprite.Height), "Sprite");
 
@@ -417,10 +420,9 @@ namespace GalaxyAngel2Localization.Utils
             }
         }
 
-        static void WritePalette(byte[] output, TexFileMetadata metadata, IndexedPixels indexed)
+        static void WritePalette(byte[] output, TexFileMetadata metadata, IndexedPixels indexed, TexLayout layout)
         {
-            var clut = metadata.Clut!;
-            int offset = TexDecoder.GetAbsoluteOffset(metadata.BaseOffset, clut.RelativeOffset);
+            int offset = layout.ClutOffset;
             int length = checked(indexed.ColorCount * 4);
             TexDecoder.EnsureRange(output.Length, offset, length, "CLUT");
 
@@ -455,27 +457,47 @@ namespace GalaxyAngel2Localization.Utils
                 _ = GetPaletteColorCount(metadata);
         }
 
-        static int CalculateFileLength(TexFileMetadata metadata)
+        // 依据 2115 个原版 TEX 全量验证的打包规则：头部表之后按 16 字节对齐，
+        // sprite 按条目顺序紧密排列，CLUT 固定在最后一个数据块之后，文件长度即末块结束。
+        internal sealed class TexLayout
+        {
+            public required int[] SpriteOffsets { get; init; }
+            public int ClutOffset { get; init; } = -1;
+            public required int FileLength { get; init; }
+        }
+
+        internal static TexLayout PlanLayout(TexFileMetadata metadata)
         {
             int tableLength = checked(0x28 + (metadata.Sprites.Count + (metadata.Clut == null ? 0 : 1)) * 20);
-            int length = tableLength;
-            foreach (var sprite in metadata.Sprites)
+            int cursor = Align16(tableLength);
+
+            var spriteOffsets = new int[metadata.Sprites.Count];
+            for (int i = 0; i < metadata.Sprites.Count; i++)
             {
-                int offset = TexDecoder.GetAbsoluteOffset(metadata.BaseOffset, sprite.RelativeOffset);
-                if (offset < tableLength)
-                    throw new InvalidDataException("Sprite data overlaps the TEX entry table.");
-                int dataLength = checked(TexDecoder.GetRowSize(sprite.Psm, sprite.Width) * sprite.Height);
-                length = Math.Max(length, checked(offset + dataLength));
+                var sprite = metadata.Sprites[i];
+                int start = Align16(cursor);
+                spriteOffsets[i] = start;
+                cursor = checked(start + checked(TexDecoder.GetRowSize(sprite.Psm, sprite.Width) * sprite.Height));
             }
 
+            int clutOffset = -1;
             if (metadata.Clut != null)
             {
-                int offset = TexDecoder.GetAbsoluteOffset(metadata.BaseOffset, metadata.Clut.RelativeOffset);
-                if (offset < tableLength)
-                    throw new InvalidDataException("CLUT data overlaps the TEX entry table.");
-                length = Math.Max(length, checked(offset + GetPaletteColorCount(metadata) * 4));
+                clutOffset = Align16(cursor);
+                cursor = checked(clutOffset + GetPaletteColorCount(metadata) * 4);
             }
-            return length;
+
+            return new TexLayout { SpriteOffsets = spriteOffsets, ClutOffset = clutOffset, FileLength = cursor };
+        }
+
+        static int Align16(int value) => (value + 15) & ~15;
+
+        static uint ToRelative(uint baseOffset, int absolute)
+        {
+            long value = (long)absolute - baseOffset;
+            if (value < 0 || value > uint.MaxValue)
+                throw new InvalidDataException("Planned TEX offset cannot be stored relative to the base offset.");
+            return (uint)value;
         }
 
         static int GetPaletteColorCount(TexFileMetadata metadata)
@@ -489,9 +511,9 @@ namespace GalaxyAngel2Localization.Utils
             throw new InvalidDataException("TEX has CLUT metadata but no indexed sprite.");
         }
 
-        static void WriteEntry(byte[] output, int offset, TexEntryMetadata entry)
+        static void WriteEntry(byte[] output, int offset, TexEntryMetadata entry, uint relativeOffset)
         {
-            WriteUInt32(output, offset, entry.RelativeOffset);
+            WriteUInt32(output, offset, relativeOffset);
             WriteUInt16(output, offset + 4, entry.Tbp);
             output[offset + 6] = entry.Psm;
             output[offset + 7] = 0;
@@ -503,9 +525,9 @@ namespace GalaxyAngel2Localization.Utils
             WriteUInt16(output, offset + 18, entry.Height);
         }
 
-        static void WriteClutEntry(byte[] output, int offset, TexEntryMetadata entry, int colorCount)
+        static void WriteClutEntry(byte[] output, int offset, TexEntryMetadata entry, int colorCount, uint relativeOffset)
         {
-            WriteUInt32(output, offset, entry.RelativeOffset);
+            WriteUInt32(output, offset, relativeOffset);
             WriteUInt16(output, offset + 4, entry.Tbp);
             output[offset + 6] = 0;
             output[offset + 7] = 0;

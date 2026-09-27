@@ -324,6 +324,70 @@ namespace Utils
         public static byte EncodePs2Alpha(byte a) => a == 0 ? (byte)0 : (byte)((a + 1) / 2);
 
         /// <summary>
+        /// 逻辑色号 -> CLUT 文件槽位(单位: 4 字节)。
+        /// 256 色为 PS2 的 32 色块交错顺序，16 色为直接顺序。
+        /// </summary>
+        public static int Ps2ClutFileSlot(int logical, int colorCount) =>
+            colorCount == 256
+                ? (logical & 0xE7) | ((logical & 0x08) << 1) | ((logical & 0x10) >> 1)
+                : logical;
+
+        /// <summary>
+        /// 在调色板里找与目标颜色最接近的色号: 把 alpha 差当作 RGB 偏移,
+        /// 取"黑底/白底"最坏情况误差(感知权重 绿4 红/蓝2.5)。
+        /// 目标色 alpha=0 时优先落到调色板里的透明色号（不同工具导出的"透明黑/透明白"RGB 不同）。
+        /// 用于"新颜色装不下"时的量化: 不改调色板字节，只把像素落到现有色号。
+        /// </summary>
+        public static int NearestPaletteSlot(
+            (byte R, byte G, byte B, byte A)[] palette,
+            int count,
+            (byte R, byte G, byte B, byte A) color)
+        {
+            if (color.A == 0)
+            {
+                int transparent = -1;
+                long transparentDist = long.MaxValue;
+                for (int i = 0; i < count; i++)
+                {
+                    var p = palette[i];
+                    if (p.A != 0) continue;
+                    long d = RgbDistance(p, color);
+                    if (d < transparentDist) { transparentDist = d; transparent = i; }
+                }
+                if (transparent >= 0) return transparent;
+            }
+
+            int best = 0;
+            long bestDist = long.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                var p = palette[i];
+                long dr = color.R - p.R;
+                long dg = color.G - p.G;
+                long db = color.B - p.B;
+                long da = color.A - p.A;
+                // 把 alpha 差当作 RGB 上的偏移, 取"黑底 / 白底"两种背景假设下的最坏误差
+                // (合成后可见误差取决于背景色; 取最坏值 = 跨背景最稳健, 见 ImageMagick 讨论)
+                long black = Weighted(dr - da, dg - da, db - da);
+                long white = Weighted(dr + da, dg + da, db + da);
+                long dist = Math.Max(black, white);
+                if (dist < bestDist) { bestDist = dist; best = i; }
+            }
+            return best;
+
+            // 感知权重: 绿 4, 红/蓝 2.5
+            static long Weighted(long r, long g, long b) => 5 * r * r / 2 + 4 * g * g + 5 * b * b / 2;
+
+            static long RgbDistance((byte R, byte G, byte B, byte A) p, (byte R, byte G, byte B, byte A) c)
+            {
+                long dr = c.R - p.R;
+                long dg = c.G - p.G;
+                long db = c.B - p.B;
+                return dr * dr + dg * dg + db * db;
+            }
+        }
+
+        /// <summary>
         /// 通用: 从像素流构建索引色编码用的调色板与索引。
         /// 调色板按亮度降序排列（亮色在前，字节过渡平滑，利于 LZ/ARZ 压缩），
         /// 同亮度按首次出现顺序。颜色数超过 maxColors 时返回 false（调用方自行量化）。
