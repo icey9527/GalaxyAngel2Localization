@@ -17,7 +17,7 @@ For editing script files, please use the tools in python_tools.
 <details>
 <summary><b>中文</b></summary>
 
-** 对一些 ArtDink 游戏有一定参考价值，如 `asb` 脚本、`pidx` 的 `DAT` 封包、`fsts` 子封包等等。
+对一些 ArtDink 游戏有一定参考价值，如 `asb` 脚本、`pidx` 的 `DAT` 封包、`fsts` 子封包等等。
 目前同样支持《银河天使1》的文件处理，由于两个游戏 AGI 的格式有部分变化，《银河天使2》不要使用 `agi.xml`（如果提取资源时生成了这个文件，请删除它），《银河天使1》则必须依赖此文件，请勿删除。
 
 **注意：** 这是《银河天使2》的汉化工具，如果你只想提取资源文件，请使用更方便的 [VerViewer](https://github.com/icey9527/Verviewer)。
