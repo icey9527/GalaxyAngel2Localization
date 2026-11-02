@@ -24,6 +24,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="voice/字幕编辑器C#/**/*.cs" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.0" />
   </ItemGroup>
